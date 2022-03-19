@@ -38,3 +38,37 @@ For some reason or another, PowerBI does ***NOT*** support relative file paths. 
 
 ## Things I am wanting to accomplish
 1. See what overall makes a winning team, a winning team. Compare stats across years, using a system of rankings
+
+Things needed to calculate:
+* Assists Per Game
+* Opponent Assists Per Game
+* Blocks Per Game
+* Opponent blocks per game
+* Defensive rebounds per game
+* Opponent defensive rebounds per game
+* Field goal attempts per game
+* Opponent Field goal attempts per game
+* Field goals per game
+* Opponent Field goals per game
+* Free throw attempts per game
+* Opponent Free throw attempts per game
+* Free throws per game
+* Opponent Free throws per game
+* Offensive Rebounds Per Game
+* Opponenet Offensive Rebounds Per Game
+* Opponent Perosnal Fouls Per Game
+* Personal Fouls Per Game
+* Opponent Steals Per Game
+* Steals Per Game
+* Opponent Three Point Attempts Per Game
+* Three Point Attempts Per Game
+* OPponent Three Point Per Game
+* Three Point Per Game
+* Opponent Two Point Attempts Per Game
+* Two Point Attempts Per Game
+* OPponent Two Point Per Game
+* Two Point Per Game
+* Opponent Total Rebounds Per Game
+* Total Rebounds Per Game
+* Opponent Turnover Per Game
+* Turnover Per Game
