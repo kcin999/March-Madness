@@ -22,6 +22,3 @@ Python needs to be installed. Can be found here: https://www.python.org/download
 ## Things I am wanting to accomplish
 1. See what overall makes a winning team, a winning team. Compare stats across years, using a system of rankings
 2. Tie in Machine Learning
-
-
-Got through 2007 without game type. Added that in 2008. Will have to back and fix
