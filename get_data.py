@@ -17,6 +17,7 @@ SCHOOL_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-school-s
 SCHEDULE_URL = "https://www.sports-reference.com/cbb/schools/{}/men/{}-schedule.html"
 TEAM_FILE_PATH = './Stats/Schedules/{}/{}_schedule.csv'
 SCHEDULE_FOLDER = "./Stats/Schedules/{}"
+YEAR_SCHEDULE_FILE = "./Stats/Schedules/{}_schedule.csv"
 MIN_YEAR = 2000
 MAX_YEAR = 2023
 
@@ -191,15 +192,6 @@ def get_score_data_from_sports_reference(year: int) -> pd.DataFrame:
 
         team_df['Team 1'] = team
 
-        # Removes Unwanted Columns
-        team_df = team_df[[
-            'Team 1',
-            'Opponent',
-            'Tm',
-            'Opp',
-            'Streak',
-            'Type'
-        ]]
 
         # Renames Columns
         team_df = team_df.rename(columns={
@@ -250,9 +242,35 @@ def combine_schedules(year: int):
     df = pd.DataFrame()
     for file in os.listdir(SCHEDULE_FOLDER.format(year)):
         team_df = pd.read_csv(SCHEDULE_FOLDER.format(year) + "/" + file)
+        team_df['Date'] = pd.to_datetime(team_df['Date'])
+
+        team_df = team_df[[
+            'Date',
+            'Team 1',
+            'Team 2',
+            'SRS',
+            'Team 1 Score',
+            'Team 2 Score',
+            'Streak',
+            'Result'
+        ]]
         df = pd.concat([df, team_df])
 
-    df.to_csv(f'./Stats/Schedules/{year}_schedule.csv', index=False)
+    df.to_csv(YEAR_SCHEDULE_FILE.format(year), index=False)
+
+
+def remove_duplicate_games(year: int):
+    """Removes Duplicate Games from the schedules
+
+    :param year: _description_
+    :type year: int
+    """
+    df = pd.read_csv(YEAR_SCHEDULE_FILE.format(year))
+
+    # Idea from here
+    # https://stackoverflow.com/questions/51182228/python-delete-duplicates-in-a-dataframe-based-on-two-columns-combinations
+    df = df[~df[['Date', 'Team 1', 'Team 2']].apply(frozenset, axis=1).duplicated()]
+    df.to_csv(YEAR_SCHEDULE_FILE.format(year), index=False)
 
 
 def main():
@@ -270,6 +288,7 @@ def main():
 
     for year in range(MIN_YEAR, MAX_YEAR + 1):
         combine_schedules(year)
+        remove_duplicate_games(year)
 
 
 if __name__ == "__main__":
