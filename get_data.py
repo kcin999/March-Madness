@@ -250,6 +250,7 @@ def combine_schedules(year: int):
             'Team 1',
             'Team 2',
             'SRS',
+            'Type',
             'Team 1 Score',
             'Team 2 Score',
             'Streak',
@@ -301,6 +302,8 @@ def main():
             df = get_score_data_from_sports_reference(year)
             df.to_csv(f"./Stats/Schedules/{year}_schedule.csv", index=False)
 
+    user_answer = input("Would you like to add from the combine individual schedule results into a larger single season record? (y/n) ")
+    if user_answer.upper() in ["Y"]:
         for year in range(MIN_YEAR, MAX_YEAR + 1):
             combine_schedules(year)
             remove_duplicate_games(year)
