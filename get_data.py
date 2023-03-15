@@ -5,6 +5,7 @@ import time
 import requests
 import pandas as pd
 import system
+import sqlite3
 
 # Logging setup
 logging.basicConfig(
@@ -272,23 +273,47 @@ def remove_duplicate_games(year: int):
     df = df[~df[['Date', 'Team 1', 'Team 2']].apply(frozenset, axis=1).duplicated()]
     df.to_csv(YEAR_SCHEDULE_FILE.format(year), index=False)
 
+def add_data_to_db(year: int, con: sqlite3.Connection):
+    stats_df = pd.read_csv(f'./Stats/Seasons/{year}_season_stats.csv')
+    schedule_df = pd.read_csv(YEAR_SCHEDULE_FILE.format(year))
+    stats_df['Year'] = year
+    schedule_df['Year'] = year
+
+    stats_df.to_sql('season_stats', con, if_exists='append', index=False)
+    schedule_df.to_sql('schedule_stats', con, if_exists='append', index=False)
 
 def main():
-    for year in range(MIN_YEAR, MAX_YEAR + 1):
-        df = get_season_data_from_sports_reference(year)
-        df.to_csv(f"./Stats/Seasons/{year}_season_stats.csv", index=False)
-        # Sports reference has a rate limiter on it.
-        # The rate no more than 20 calls per minute. So I am putting a sleep on it, to call only 19 times in a minute
-        time.sleep(60/19)
+    """Main Function"""
+    user_answer = input("Would you like to download season statistics? (y/n) ")
 
-    for year in range(MIN_YEAR, MAX_YEAR + 1):
-        system.createFolder(f'./Stats/Schedules/{year}')
-        df = get_score_data_from_sports_reference(year)
-        df.to_csv(f"./Stats/Schedules/{year}_schedule.csv", index=False)
+    if user_answer.upper() in ["Y"]:
+        for year in range(MIN_YEAR, MAX_YEAR + 1):
+            df = get_season_data_from_sports_reference(year)
+            df.to_csv(f"./Stats/Seasons/{year}_season_stats.csv", index=False)
+            # Sports reference has a rate limiter on it.
+            # The rate no more than 20 calls per minute. So I am putting a sleep on it, to call only 19 times in a minute
+            time.sleep(60/19)
 
-    for year in range(MIN_YEAR, MAX_YEAR + 1):
-        combine_schedules(year)
-        remove_duplicate_games(year)
+    user_answer = input("Would you like to download schedule information for each team? (y/n) ")
+    if user_answer.upper() in ["Y"]:
+        for year in range(MIN_YEAR, MAX_YEAR + 1):
+            system.createFolder(f'./Stats/Schedules/{year}')
+            df = get_score_data_from_sports_reference(year)
+            df.to_csv(f"./Stats/Schedules/{year}_schedule.csv", index=False)
+
+        for year in range(MIN_YEAR, MAX_YEAR + 1):
+            combine_schedules(year)
+            remove_duplicate_games(year)
+
+    user_answer = input("Would you like to add from the CSVs into a sqlite database? (y/n) ")
+    if user_answer.upper() in ["Y"]:
+        # SQLITE connection
+        con = sqlite3.connect("Stats/stats.sqlite")
+        for year in range(MIN_YEAR, MAX_YEAR + 1):
+            add_data_to_db(year, con)
+    
+
+    print("Program has finished")
 
 
 if __name__ == "__main__":
