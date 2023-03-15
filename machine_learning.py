@@ -1,11 +1,15 @@
+import sqlite3
 import matplotlib.pyplot as plt
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.decomposition import PCA
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import SVC
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, precision_score, recall_score
-import sqlite3
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, precision_score, recall_score,classification_report
 import pandas as pd
 
 STAT_COLUMNS_TO_USE = [
@@ -77,20 +81,32 @@ def run_model(df: pd.DataFrame):
     y = df['Result']
     X = df.drop(columns=['Result'])
 
-    scaler = StandardScaler()
-    X_standardized = scaler.fit_transform(X)
-    pca_reduction = PCA()
-    X_reduced = pca_reduction.fit_transform(X_standardized)
+    pipe = Pipeline([
+        ('ss', StandardScaler()),
+        # ('pca', PCA()),
+        ('classifier', SVC())
+    ])
 
-    X_train, X_test, y_train, y_test = train_test_split(X_reduced, y, test_size=0.2)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
-    classifier = SVC()
-    tree = classifier.fit(X_train, y_train)
+    param_dict = {
+        'classifier__kernel': ['linear', 'poly', 'rbf', 'sigmoid', 'precomputed'],
+        # 'pca__n_components': [1,2,3,4,5]
+    }
+
+    grid_search = GridSearchCV(pipe, param_grid=[param_dict])
+
+    grid_search.fit(X_train, y_train)
+
+    print(grid_search.best_params_)
+    print(grid_search.best_estimator_)
 
 
-    predictions = classifier.predict(X_test)
+    predictions = grid_search.predict(X_test)
     print(precision_score(y_test, predictions, average=None))
     print(recall_score(y_test, predictions, average=None))
+
+    print(classification_report(y_test, predictions))
 
     cm = confusion_matrix(y_test, predictions)
     display = ConfusionMatrixDisplay(confusion_matrix=cm)
