@@ -1,9 +1,10 @@
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, precision_score, recall_score, classification_report
-from machine_learning import load_model, get_data, clean_data
+from machine_learning import load_model, get_training_data, clean_data
 
-df = get_data('NCAA', True)
-df = clean_data(df, True)
+season_averages = True
+df = get_training_data('NCAA', season_averages)
+df = clean_data(df, season_averages)
 
 y = df['Result']
 x = df.drop(columns=['Result'])

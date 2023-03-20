@@ -37,15 +37,52 @@ STAT_COLUMNS_TO_USE = [
     'Totals STL',
     'Totals BLK',
     'Totals TOV',
-    'Totals PF'
+    'Totals PF',
+    'School Advanced Pace',
+    'School Advanced ORtg',
+    'School Advanced FTr',
+    'School Advanced 3PAr',
+    'School Advanced TS%',
+    'School Advanced TRB%',
+    'School Advanced AST%',
+    'School Advanced STL%',
+    'School Advanced BLK%',
+    'School Advanced eFG%',
+    'School Advanced TOV%',
+    'School Advanced ORB%',
+    'School Advanced FT/FGA',
 ]
 
-SQLITE_CONNECTION = sqlite3.connect('./Stats/stats.sqlite')
+COLUMNS_NOT_TO_INCLUDE_IN_AVERAGE = [
+    'Overall G', 
+    'Overall SRS', 
+    'Overall SOS', 
+    'Totals FG%', 
+    'Totals 3P%', 
+    'Totals FT%',
+    'School Advanced Pace',
+    'School Advanced ORtg',
+    'School Advanced FTr',
+    'School Advanced 3PAr',
+    'School Advanced TS%',
+    'School Advanced TRB%',
+    'School Advanced AST%',
+    'School Advanced STL%',
+    'School Advanced BLK%',
+    'School Advanced eFG%',
+    'School Advanced TOV%',
+    'School Advanced ORB%',
+    'School Advanced FT/FGA',
+]
+
+DATABASE_FILE = './Stats/stats.sqlite'
+
+SQLITE_CONNECTION = sqlite3.connect(DATABASE_FILE)
 
 MODEL_NAME = 'final_model.sav'
 
 
-def get_data(game_type='REG', season_averages: bool = False) -> pd.DataFrame:
+def get_training_data(game_type='REG', season_averages: bool = False) -> pd.DataFrame:
     """Gets the data out of the SQLite database
 
     :param game_type: Game type to select, defaults to 'REG'
@@ -65,7 +102,7 @@ def get_data(game_type='REG', season_averages: bool = False) -> pd.DataFrame:
     """
     df = pd.read_sql_query(
         "SELECT "
-        "schst.Result, "
+        "schst.Result, schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
         f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in STAT_COLUMNS_TO_USE])}, "
         f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in STAT_COLUMNS_TO_USE])} "
         "FROM schedule_stats schst "
@@ -76,16 +113,80 @@ def get_data(game_type='REG', season_averages: bool = False) -> pd.DataFrame:
     )
 
     if season_averages:
-        columns_to_not_calulate_average = ['Overall G', 'Overall SRS', 'Overall SOS', 'Totals FG%', 'Totals 3P%', 'Totals FT%']
         for column in STAT_COLUMNS_TO_USE:
-            if column in columns_to_not_calulate_average:
+            if column in COLUMNS_NOT_TO_INCLUDE_IN_AVERAGE:
                 continue
 
             df['TEAM_1_' + column.replace('Totals', 'Average')] = df['TEAM_1_' + column] / df['TEAM_1_Overall G']
             df['TEAM_2_' + column.replace('Totals', 'Average')] = df['TEAM_2_' + column] / df['TEAM_2_Overall G']
-    
-        df = df.drop(columns=['TEAM_1_' + x for x in set(STAT_COLUMNS_TO_USE) - set(columns_to_not_calulate_average)])
-        df = df.drop(columns=['TEAM_2_' + x for x in set(STAT_COLUMNS_TO_USE) - set(columns_to_not_calulate_average)])
+
+        df = df.drop(columns=['TEAM_1_' + x for x in set(STAT_COLUMNS_TO_USE) - set(COLUMNS_NOT_TO_INCLUDE_IN_AVERAGE)])
+        df = df.drop(columns=['TEAM_2_' + x for x in set(STAT_COLUMNS_TO_USE) - set(COLUMNS_NOT_TO_INCLUDE_IN_AVERAGE)])
+
+    df.columns = df.columns.str.replace('School Advanced ', '')
+
+    df = df.drop(columns=['TEAM_1_Overall G', 'TEAM_2_Overall G'])
+
+
+    return df
+
+
+def get_team_data(team1: tuple[str], team2: tuple[str], year: int, team_1_streak: int = 0, team_2_streak: int = 0, season_averages: bool = False) -> pd.DataFrame:
+    """Gets the data out of the SQLite database
+
+    :param team1: Team 1 to get stats for
+    :type team1: bool
+
+    :param team2: Team 2 to get stats for
+    :type team2: bool
+
+    :param team_1_streak: Team 1 active win streak, defaults to 0
+    :type team_1_streak: bool, optional
+
+    :param team_2_streak: Team 2 active win streak, defaults to 0
+    :type team_2_streak: bool, optional
+
+    :param year: Year of stats to get
+    :type year: bool
+
+    :param season_averages: Whether to use game average statistics or not, defaults to False
+    :type season_averages: bool, optional
+
+    :return: Dataframe of season data matching the given data
+    :rtype: pd.DataFrame
+    """
+    if len(team1) != len(team2):
+        raise ValueError("Length of Team 2 list does not match Team 1 List")
+
+    df = pd.DataFrame()
+    for i, _team_1_name in enumerate(team1):
+        temp_df = pd.read_sql_query(
+            "SELECT "
+            f"{team_1_streak} as `Team 1 Streak`, "
+            f"{team_2_streak} as `Team 2 Streak`, "
+            f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in STAT_COLUMNS_TO_USE])}, "
+            f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in STAT_COLUMNS_TO_USE])} "
+            "FROM season_stats seast_team1,  season_stats seast_team2 "
+            f"WHERE seast_team1.Year = {year} AND seast_team1.School = '{team1[i]}' AND "
+            f"seast_team2.Year = {year} AND seast_team2.School = '{team2[i]}'",
+            SQLITE_CONNECTION
+        )
+        if temp_df.empty:
+            raise ValueError(f"Could not find one of {team1[i]} or {team2[i]} in database")
+        df = pd.concat([df, temp_df])
+
+    if season_averages:
+        for column in STAT_COLUMNS_TO_USE:
+            if column in COLUMNS_NOT_TO_INCLUDE_IN_AVERAGE:
+                continue
+
+            df['TEAM_1_' + column.replace('Totals', 'Average')] = df['TEAM_1_' + column] / df['TEAM_1_Overall G']
+            df['TEAM_2_' + column.replace('Totals', 'Average')] = df['TEAM_2_' + column] / df['TEAM_2_Overall G']
+
+        df = df.drop(columns=['TEAM_1_' + x for x in set(STAT_COLUMNS_TO_USE) - set(COLUMNS_NOT_TO_INCLUDE_IN_AVERAGE)])
+        df = df.drop(columns=['TEAM_2_' + x for x in set(STAT_COLUMNS_TO_USE) - set(COLUMNS_NOT_TO_INCLUDE_IN_AVERAGE)])
+    df.columns = df.columns.str.replace('School Advanced ', '')
+    df = df.drop(columns=['TEAM_1_Overall G', 'TEAM_2_Overall G'])
 
     return df
 
@@ -102,13 +203,19 @@ def clean_data(df: pd.DataFrame, season_averages: bool = False) -> pd.DataFrame:
     :return: Cleaned Dataframe
     :rtype: pd.DataFrame
     """
-    if not season_averages:
-        # Fill blank Minutes played with 40 times the number of games
-        df['TEAM_1_Totals MP'].fillna(40 * df['TEAM_1_Overall G'], inplace=True)
-        df['TEAM_2_Totals MP'].fillna(40 * df['TEAM_2_Overall G'], inplace=True)
-    else:
-        df['TEAM_1_Average MP'].fillna(40)
-        df['TEAM_2_Average MP'].fillna(40)
+    # Skip if total MP not being used in columns
+    if 'Totals MP' not in STAT_COLUMNS_TO_USE:
+        if not season_averages:
+            # Fill blank Minutes played with 40 times the number of games
+            df['TEAM_1_Totals MP'].fillna(40 * df['TEAM_1_Overall G'], inplace=True)
+            df['TEAM_2_Totals MP'].fillna(40 * df['TEAM_2_Overall G'], inplace=True)
+        else:
+            df['TEAM_1_Average MP'].fillna(40)
+            df['TEAM_2_Average MP'].fillna(40)
+
+    # Fill Blank win streaks with 0
+    df['Team 1 Streak'].fillna(0)
+    df['Team 2 Streak'].fillna(0)
 
 
     # All other columns, I am backfilling with the median
@@ -131,8 +238,9 @@ def train_model(df: pd.DataFrame):
 
     pipe = Pipeline([
         ('ss', StandardScaler()),
-        # ('pca', PCA()),
+        ('pca', PCA()),
         ('classifier', LogisticRegression(max_iter=1000))
+        # ('classifier', MLPClassifier(max_iter=1000))
     ])
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
@@ -140,10 +248,10 @@ def train_model(df: pd.DataFrame):
     param_dict = {
         # 'classifier__kernel': ['linear', 'poly', 'rbf', 'sigmoid', 'precomputed'],
         # 'classifier__max_depth': [4,8,12,20],
-        # 'pca__n_components': [1,2,3,4,5]
+        'pca__n_components': [5,10,15,20,25,30,35,40]
     }
 
-    grid_search = GridSearchCV(pipe, param_grid=[param_dict])
+    grid_search = GridSearchCV(pipe, param_grid=[param_dict], n_jobs=2)
 
     grid_search.fit(X_train, y_train)
 
@@ -200,7 +308,7 @@ def load_model(file_name: str = "my-model.skops"):
 def main():
     """Main Function"""
     season_averages = True
-    df = get_data(season_averages=season_averages)
+    df = get_training_data(season_averages=season_averages)
     df = clean_data(df, season_averages)
     model = train_model(df)
     save_model(model)

@@ -15,10 +15,15 @@ logging.basicConfig(
 )
 
 SCHOOL_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-school-stats.html"
+ADVANCED_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-advanced-school-stats.html"
 SCHEDULE_URL = "https://www.sports-reference.com/cbb/schools/{}/men/{}-schedule.html"
-TEAM_FILE_PATH = './Stats/Schedules/{}/{}_schedule.csv'
 SCHEDULE_FOLDER = "./Stats/Schedules/{}"
+SEASON_STAT_FILE = '"./Stats/Seasons/{}_season_stats.csv"'
+TEAM_SCHEDULE_FILE = './Stats/Schedules/{}/{}_schedule.csv'
 YEAR_SCHEDULE_FILE = "./Stats/Schedules/{}_schedule.csv"
+BASIC_SEASON_STATS_FILE = './Stats/Seasons/{}_season_stats.csv'
+ADV_SEASON_STATS_FILE = './Stats/Seasons/{}_advanced_season_stats.csv'
+DATABASE_FILE = 'Stats/stats.sqlite'
 MIN_YEAR = 2000
 MAX_YEAR = 2023
 
@@ -119,6 +124,56 @@ def get_season_data_from_sports_reference(year: int) -> pd.DataFrame:
     # Returns CSV
     return df
 
+def get_advanced_season_data_from_sports_reference(year: int) -> pd.DataFrame:
+    """Gets the advanced season data for a given year
+
+    :param year: Year to get data for
+    :type year: int
+
+    :return: DataFrame of Stats formatted for use
+    :rtype: pd.DataFrame
+    """
+    # Gets Data
+    response = requests.get(ADVANCED_STATS_URL.format(year), timeout=None)
+
+    # Makes sure that there is no error
+    response.raise_for_status()
+
+    # Reads Data into DataFrame
+    df = pd.read_html(
+        response.text,
+        attrs={
+            'id': 'adv_school_stats'
+        }
+    )[0]
+
+    # Combines Columns into One Level
+    df.columns = df.columns.map(' '.join).str.strip('|')
+
+    # Renames Columns using regex
+    df.columns = df.columns.str.replace(
+        r'Unnamed: \d_level_\d ',
+        '',
+        regex=True
+    )
+
+    # Drop columns that have all blanks
+    df = df.dropna(axis=1, how='all')
+
+    # Removes rows that are in the middle of the table
+    df = df[(df.Rk != 'Rk') & (pd.notna(df.Rk))]
+
+    # Drops NCAA from row value
+    df['School'] = df['School'].str.rstrip(' NCAA')
+
+    # Drops Rank Column since it wasn't really helpful
+    df = df.drop(columns=[
+        'Rk',
+    ])
+
+    # Returns CSV
+    return df
+
 
 def get_score_data_from_sports_reference(year: int) -> pd.DataFrame:
     """Gets the schedule information from sports reference
@@ -134,7 +189,7 @@ def get_score_data_from_sports_reference(year: int) -> pd.DataFrame:
     df = pd.DataFrame()
     for i, team in enumerate(team_list):
 
-        if os.path.exists(TEAM_FILE_PATH.format(year, team)):
+        if os.path.exists(TEAM_SCHEDULE_FILE.format(year, team)):
             continue
 
         # Sports reference has a rate limiter on it.
@@ -227,7 +282,7 @@ def get_score_data_from_sports_reference(year: int) -> pd.DataFrame:
         # False -> Team 2 won the game
         team_df['Result'] = team_df['Team 1 Score'] > team_df['Team 2 Score']
 
-        team_df.to_csv(TEAM_FILE_PATH.format(year, team), index=False)
+        team_df.to_csv(TEAM_SCHEDULE_FILE.format(year, team), index=False)
 
         df = pd.concat([df, team_df])
 
@@ -256,7 +311,11 @@ def combine_schedules(year: int):
             'Streak',
             'Result'
         ]]
-        df = pd.concat([df, team_df])
+        # Shifts Streaks to be able to have the win streak coming into the game
+        team_df['Streak'] = team_df['Streak'].shift(1)
+        team_df['Streak'] = team_df['Streak'].fillna(0)
+
+        df = pd.concat([df, team_df], ignore_index=True)
 
     df.to_csv(YEAR_SCHEDULE_FILE.format(year), index=False)
 
@@ -269,19 +328,58 @@ def remove_duplicate_games(year: int):
     """
     df = pd.read_csv(YEAR_SCHEDULE_FILE.format(year))
 
+
+    df = df.merge(df[['Team 2', 'Team 1', 'Date', 'Streak']], how='left', left_on=['Team 1', 'Team 2', 'Date'], right_on=['Team 2', 'Team 1', 'Date'], suffixes=[None, '_joined'])
+
+    df = df.drop(columns=['Team 2_joined', 'Team 1_joined'])
+    df = df.rename(columns={
+        'Streak_joined': 'Team 2 Streak',
+        'Streak': 'Team 1 Streak'
+    })
+
     # Idea from here
     # https://stackoverflow.com/questions/51182228/python-delete-duplicates-in-a-dataframe-based-on-two-columns-combinations
     df = df[~df[['Date', 'Team 1', 'Team 2']].apply(frozenset, axis=1).duplicated()]
     df.to_csv(YEAR_SCHEDULE_FILE.format(year), index=False)
 
+
 def add_data_to_db(year: int, con: sqlite3.Connection):
-    stats_df = pd.read_csv(f'./Stats/Seasons/{year}_season_stats.csv')
+    """Adds the data to the sql
+
+    :param year: Year of the data to add
+    :type year: int
+    :param con: _description_
+    :type con: sqlite3.Connection
+    """
+    basic_stats_df = pd.read_csv(BASIC_SEASON_STATS_FILE.format(year))
+    advanced_stats_df = pd.read_csv(ADV_SEASON_STATS_FILE.format(year))
     schedule_df = pd.read_csv(YEAR_SCHEDULE_FILE.format(year))
+
+    # Remove Duplicate Information
+    advanced_stats_df = advanced_stats_df.drop(columns=[
+        'Overall G',
+        'Overall W',
+        'Overall L',
+        'Overall W-L%',
+        'Overall SRS',
+        'Overall SOS',
+        'Conf. W',
+        'Conf. L',
+        'Home W',
+        'Home L',
+        'Away W',
+        'Away L',
+        'Points Tm.',
+        'Points Opp.'
+    ])
+
+    stats_df = pd.merge(basic_stats_df, advanced_stats_df, how='outer', on='School')
     stats_df['Year'] = year
     schedule_df['Year'] = year
 
     stats_df.to_sql('season_stats', con, if_exists='append', index=False)
     schedule_df.to_sql('schedule_stats', con, if_exists='append', index=False)
+
 
 def main():
     """Main Function"""
@@ -290,7 +388,18 @@ def main():
     if user_answer.upper() in ["Y"]:
         for year in range(MIN_YEAR, MAX_YEAR + 1):
             df = get_season_data_from_sports_reference(year)
-            df.to_csv(f"./Stats/Seasons/{year}_season_stats.csv", index=False)
+            df.to_csv(SEASON_STAT_FILE.format(year), index=False)
+            # Sports reference has a rate limiter on it.
+            # The rate no more than 20 calls per minute. So I am putting a sleep on it, to call only 19 times in a minute
+            time.sleep(60/19)
+
+
+    user_answer = input("Would you like to download advanced season statistics? (y/n) ")
+
+    if user_answer.upper() in ["Y"]:
+        for year in range(MIN_YEAR, MAX_YEAR + 1):
+            df = get_advanced_season_data_from_sports_reference(year)
+            df.to_csv(ADV_SEASON_STATS_FILE.format(year), index=False)
             # Sports reference has a rate limiter on it.
             # The rate no more than 20 calls per minute. So I am putting a sleep on it, to call only 19 times in a minute
             time.sleep(60/19)
@@ -298,9 +407,9 @@ def main():
     user_answer = input("Would you like to download schedule information for each team? (y/n) ")
     if user_answer.upper() in ["Y"]:
         for year in range(MIN_YEAR, MAX_YEAR + 1):
-            system.createFolder(f'./Stats/Schedules/{year}')
+            system.createFolder(SCHEDULE_FOLDER.format(year))
             df = get_score_data_from_sports_reference(year)
-            df.to_csv(f"./Stats/Schedules/{year}_schedule.csv", index=False)
+            df.to_csv(YEAR_SCHEDULE_FILE.format(year), index=False)
 
     user_answer = input("Would you like to add from the combine individual schedule results into a larger single season record? (y/n) ")
     if user_answer.upper() in ["Y"]:
@@ -311,10 +420,10 @@ def main():
     user_answer = input("Would you like to add from the CSVs into a sqlite database? (y/n) ")
     if user_answer.upper() in ["Y"]:
         # SQLITE connection
-        con = sqlite3.connect("Stats/stats.sqlite")
+        con = sqlite3.connect(DATABASE_FILE)
         for year in range(MIN_YEAR, MAX_YEAR + 1):
             add_data_to_db(year, con)
-    
+
 
     print("Program has finished")
 
