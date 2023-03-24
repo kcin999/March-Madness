@@ -53,6 +53,18 @@ STAT_COLUMNS_TO_USE = [
     'School Advanced FT/FGA',
 ]
 
+KENPOM_RANKINGS = [
+    'AdjEM',
+    'AdjO',
+    'AdjD',
+    'AdjT',
+    'Luck',
+    'Strength of Schedule_AdjEM',
+    'Strength of Schedule_OppO',
+    'Strength of Schedule_OppD',
+    'NCSOS_AdjEM'
+]
+
 COLUMNS_NOT_TO_INCLUDE_IN_AVERAGE = [
     'Overall G', 
     'Overall SRS', 
@@ -102,12 +114,13 @@ def get_training_data(game_type='REG', season_averages: bool = False) -> pd.Data
     """
     df = pd.read_sql_query(
         "SELECT "
-        "schst.Result, schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
-        f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in STAT_COLUMNS_TO_USE])}, "
-        f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in STAT_COLUMNS_TO_USE])} "
+        "schst.Result, "
+        # "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
+        f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in KENPOM_RANKINGS])}, "
+        f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in KENPOM_RANKINGS])} "
         "FROM schedule_stats schst "
-        "INNER JOIN season_stats seast_team1 ON schst.`Team 1` = seast_team1.School AND schst.Year = seast_team1.Year "
-        "INNER JOIN season_stats seast_team2 ON schst.`Team 2` = seast_team2.School AND schst.Year = seast_team2.Year "
+        "INNER JOIN kenpom_stats seast_team1 ON schst.`Team 1` = seast_team1.Team AND schst.Year = seast_team1.Year "
+        "INNER JOIN kenpom_stats seast_team2 ON schst.`Team 2` = seast_team2.Team AND schst.Year = seast_team2.Year "
         f"WHERE Type = '{game_type}'",
         SQLITE_CONNECTION
     )
@@ -123,9 +136,9 @@ def get_training_data(game_type='REG', season_averages: bool = False) -> pd.Data
         df = df.drop(columns=['TEAM_1_' + x for x in set(STAT_COLUMNS_TO_USE) - set(COLUMNS_NOT_TO_INCLUDE_IN_AVERAGE)])
         df = df.drop(columns=['TEAM_2_' + x for x in set(STAT_COLUMNS_TO_USE) - set(COLUMNS_NOT_TO_INCLUDE_IN_AVERAGE)])
 
-    df.columns = df.columns.str.replace('School Advanced ', '')
+    # df.columns = df.columns.str.replace('School Advanced ', '')
 
-    df = df.drop(columns=['TEAM_1_Overall G', 'TEAM_2_Overall G'])
+    # df = df.drop(columns=['TEAM_1_Overall G', 'TEAM_2_Overall G'])
 
 
     return df
@@ -162,13 +175,13 @@ def get_team_data(team1: tuple[str], team2: tuple[str], year: int, team_1_streak
     for i, _team_1_name in enumerate(team1):
         temp_df = pd.read_sql_query(
             "SELECT "
-            f"{team_1_streak} as `Team 1 Streak`, "
-            f"{team_2_streak} as `Team 2 Streak`, "
-            f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in STAT_COLUMNS_TO_USE])}, "
-            f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in STAT_COLUMNS_TO_USE])} "
-            "FROM season_stats seast_team1,  season_stats seast_team2 "
-            f"WHERE seast_team1.Year = {year} AND seast_team1.School = '{team1[i]}' AND "
-            f"seast_team2.Year = {year} AND seast_team2.School = '{team2[i]}'",
+            # f"{team_1_streak} as `Team 1 Streak`, "
+            # f"{team_2_streak} as `Team 2 Streak`, "
+            f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in KENPOM_RANKINGS])}, "
+            f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in KENPOM_RANKINGS])} "
+            "FROM kenpom_stats seast_team1,  kenpom_stats seast_team2 "
+            f"WHERE seast_team1.Year = {year} AND seast_team1.Team = '{team1[i]}' AND "
+            f"seast_team2.Year = {year} AND seast_team2.Team = '{team2[i]}'",
             SQLITE_CONNECTION
         )
         if temp_df.empty:
@@ -185,8 +198,8 @@ def get_team_data(team1: tuple[str], team2: tuple[str], year: int, team_1_streak
 
         df = df.drop(columns=['TEAM_1_' + x for x in set(STAT_COLUMNS_TO_USE) - set(COLUMNS_NOT_TO_INCLUDE_IN_AVERAGE)])
         df = df.drop(columns=['TEAM_2_' + x for x in set(STAT_COLUMNS_TO_USE) - set(COLUMNS_NOT_TO_INCLUDE_IN_AVERAGE)])
-    df.columns = df.columns.str.replace('School Advanced ', '')
-    df = df.drop(columns=['TEAM_1_Overall G', 'TEAM_2_Overall G'])
+    # df.columns = df.columns.str.replace('School Advanced ', '')
+    # df = df.drop(columns=['TEAM_1_Overall G', 'TEAM_2_Overall G'])
 
     return df
 
@@ -238,7 +251,7 @@ def train_model(df: pd.DataFrame):
 
     pipe = Pipeline([
         ('ss', StandardScaler()),
-        ('pca', PCA()),
+        # ('pca', PCA()),
         ('classifier', LogisticRegression(max_iter=1000))
         # ('classifier', MLPClassifier(max_iter=1000))
     ])
@@ -248,7 +261,7 @@ def train_model(df: pd.DataFrame):
     param_dict = {
         # 'classifier__kernel': ['linear', 'poly', 'rbf', 'sigmoid', 'precomputed'],
         # 'classifier__max_depth': [4,8,12,20],
-        'pca__n_components': [5,10,15,20,25,30,35,40]
+        # 'pca__n_components': [1, 5,10,15,18]
     }
 
     grid_search = GridSearchCV(pipe, param_grid=[param_dict], n_jobs=2)
@@ -307,11 +320,11 @@ def load_model(file_name: str = "my-model.skops"):
 
 def main():
     """Main Function"""
-    season_averages = True
+    season_averages = False
     df = get_training_data(season_averages=season_averages)
-    df = clean_data(df, season_averages)
+    # df = clean_data(df, season_averages)
     model = train_model(df)
-    save_model(model)
+    save_model(model, 'logistic_regression.skops')
 
 
 if __name__ == "__main__":

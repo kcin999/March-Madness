@@ -17,14 +17,16 @@ logging.basicConfig(
 SCHOOL_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-school-stats.html"
 ADVANCED_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-advanced-school-stats.html"
 SCHEDULE_URL = "https://www.sports-reference.com/cbb/schools/{}/men/{}-schedule.html"
+KENPOM_URL = "https://kenpom.com/index.php?y={}"
 SCHEDULE_FOLDER = "./Stats/Schedules/{}"
 SEASON_STAT_FILE = '"./Stats/Seasons/{}_season_stats.csv"'
 TEAM_SCHEDULE_FILE = './Stats/Schedules/{}/{}_schedule.csv'
 YEAR_SCHEDULE_FILE = "./Stats/Schedules/{}_schedule.csv"
 BASIC_SEASON_STATS_FILE = './Stats/Seasons/{}_season_stats.csv'
 ADV_SEASON_STATS_FILE = './Stats/Seasons/{}_advanced_season_stats.csv'
+KENPOM_FILE = './Stats/Seasons/{}_kenpom.csv'
 DATABASE_FILE = 'Stats/stats.sqlite'
-MIN_YEAR = 2000
+MIN_YEAR = 2002
 MAX_YEAR = 2023
 
 SPORTS_REFERENCE_TEAM_NAMES = {
@@ -123,6 +125,7 @@ def get_season_data_from_sports_reference(year: int) -> pd.DataFrame:
 
     # Returns CSV
     return df
+
 
 def get_advanced_season_data_from_sports_reference(year: int) -> pd.DataFrame:
     """Gets the advanced season data for a given year
@@ -343,6 +346,60 @@ def remove_duplicate_games(year: int):
     df.to_csv(YEAR_SCHEDULE_FILE.format(year), index=False)
 
 
+def get_kenpom_data(year: int):
+    """Scrapes KenPom data for advanced analytics
+
+    :param year: Year to grab
+    :type year: int
+    """
+    # Gets Data
+    # Set Custom Headers to be able to work
+    headers = {'User-Agent': 'PostmanRuntime/7.29.2'}
+    response = requests.get(KENPOM_URL.format(year), timeout=None, headers = headers)
+
+    # Makes sure that there is no error
+    response.raise_for_status()
+
+    # Reads Data into DataFrame
+    df = pd.read_html(
+        response.text,
+        attrs={
+            'id': 'ratings-table'
+        }
+    )[0]
+
+    # Removes all headers but the top 2 and combines them
+    df.columns = [col[0] + '_' + col[1] for col in df.columns]
+
+    df.columns = df.columns.str.replace('Unnamed: \d+_level_0_', '', regex=True)
+
+    df = df.dropna(how='any')
+
+    df['Team'] = df['Team'].str.replace(' \d+', '', regex=True)
+
+    # Removes small ranking columns
+    df = df.loc[:,~df.columns.duplicated()].copy()
+
+    # Removes rank columns
+    df = df[(df.Rk != 'Rk') & (pd.notna(df.Rk))]
+
+
+    # Convert datatypes
+    df = df.astype({
+        'AdjEM': 'float',
+        'AdjO': 'float',
+        'AdjD': 'float',
+        'AdjT': 'float',
+        'Luck': 'float',
+        'Strength of Schedule_AdjEM': 'float',
+        'Strength of Schedule_OppO': 'float',
+        'Strength of Schedule_OppD': 'float',
+        'NCSOS_AdjEM': 'float',
+    })
+
+    return df
+
+
 def add_data_to_db(year: int, con: sqlite3.Connection):
     """Adds the data to the sql
 
@@ -354,6 +411,7 @@ def add_data_to_db(year: int, con: sqlite3.Connection):
     basic_stats_df = pd.read_csv(BASIC_SEASON_STATS_FILE.format(year))
     advanced_stats_df = pd.read_csv(ADV_SEASON_STATS_FILE.format(year))
     schedule_df = pd.read_csv(YEAR_SCHEDULE_FILE.format(year))
+    kenpom_df = pd.read_csv(KENPOM_FILE.format(year))
 
     # Remove Duplicate Information
     advanced_stats_df = advanced_stats_df.drop(columns=[
@@ -376,15 +434,16 @@ def add_data_to_db(year: int, con: sqlite3.Connection):
     stats_df = pd.merge(basic_stats_df, advanced_stats_df, how='outer', on='School')
     stats_df['Year'] = year
     schedule_df['Year'] = year
+    kenpom_df['Year'] = year
 
     stats_df.to_sql('season_stats', con, if_exists='append', index=False)
     schedule_df.to_sql('schedule_stats', con, if_exists='append', index=False)
+    kenpom_df.to_sql('kenpom_stats', con, if_exists='append', index=False)
 
 
 def main():
     """Main Function"""
-    user_answer = input("Would you like to download season statistics? (y/n) ")
-
+    user_answer = input("Would you like to download season statistics for sports reference? (y/n) ")
     if user_answer.upper() in ["Y"]:
         for year in range(MIN_YEAR, MAX_YEAR + 1):
             df = get_season_data_from_sports_reference(year)
@@ -394,8 +453,7 @@ def main():
             time.sleep(60/19)
 
 
-    user_answer = input("Would you like to download advanced season statistics? (y/n) ")
-
+    user_answer = input("Would you like to download advanced season statistics from sports reference? (y/n) ")
     if user_answer.upper() in ["Y"]:
         for year in range(MIN_YEAR, MAX_YEAR + 1):
             df = get_advanced_season_data_from_sports_reference(year)
@@ -410,6 +468,15 @@ def main():
             system.createFolder(SCHEDULE_FOLDER.format(year))
             df = get_score_data_from_sports_reference(year)
             df.to_csv(YEAR_SCHEDULE_FILE.format(year), index=False)
+
+    user_answer = input("Would you like to get ranking data from KenPom? (y/n) ")
+    if user_answer.upper() in ["Y"]:
+        for year in range(MIN_YEAR, MAX_YEAR + 1):
+            system.createFolder(SCHEDULE_FOLDER.format(year))
+            df = get_kenpom_data(year)
+            df.to_csv(KENPOM_FILE.format(year), index=False)
+            time.sleep(60/19)
+
 
     user_answer = input("Would you like to add from the combine individual schedule results into a larger single season record? (y/n) ")
     if user_answer.upper() in ["Y"]:
