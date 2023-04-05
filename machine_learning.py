@@ -246,7 +246,7 @@ def train_model(df: pd.DataFrame):
     param_dict = {
         # 'classifier__kernel': ['linear', 'poly', 'rbf', 'sigmoid', 'precomputed'],
         # 'classifier__max_depth': [4,8,12,20],
-        # 'pca__n_components': [1, 5,10,15,18]
+        # 'pca__n_components': [1, 5,10, 15, 18]
     }
 
     grid_search = GridSearchCV(pipe, param_grid=[param_dict], n_jobs=2)
@@ -269,14 +269,6 @@ def train_model(df: pd.DataFrame):
     results['Training Validation']['True Negatives'] = cm[0][0]
     results['Training Validation']['False Negatives'] = cm[1][0]
 
-
-    print(grid_search.best_params_)
-    print(grid_search.best_estimator_)
-
-    print(precision_score(y_test, predictions, average=None))
-    print(recall_score(y_test, predictions, average=None))
-
-    print(classification_report(y_test, predictions))
 
     return grid_search, results
 
@@ -372,7 +364,7 @@ def main():
         "INNER JOIN kenpom_stats seast_team2 ON schst.`Team 2` = seast_team2.Team AND schst.Year = seast_team2.Year "
         "WHERE Type = '{}'"
     )
-    system.createFolder('.models/')
+    system.createFolder('./models/')
     model_file_name = 'models/' + datetime.datetime.now().strftime('%Y%m%d %H%M%S') + '_model.skops'
     use_averages = True
 
@@ -395,8 +387,11 @@ def main():
         f"Model Saved to: {model_file_name}\n"
         f"\tQuery: {query}\n"
         f"\tUse Averages: {use_averages}\n"
-        f"\tbestparams: {results['bestparams']}\n"
-        f"\tbestestimator: {results['bestestimator']}\n"
+        "\tModel Information:\n"
+            f"\t\tPipeline: {results['pipeline']}\n"
+            f"\t\tParam Dictionary: {results['paramdict']}\n"
+            f"\t\tbestparams: {results['bestparams']}\n"
+            f"\t\tbestestimator: {results['bestestimator']}\n"
         "\tTraining:\n"
             f"\t\tprecision: {results['Training Validation']['precision']}\n"
             f"\t\trecall: {results['Training Validation']['recall']}\n"
