@@ -14,13 +14,19 @@ logging.basicConfig(
     level=logging.DEBUG
 )
 
+##### URLS #####
 SCHOOL_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-school-stats.html"
 SCHOOL_ADVANCED_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-advanced-school-stats.html"
 OPPONENT_SCHOOL_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-opponent-stats.html"
 OPPONENT_ADVANCED_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-advanced-opponent-stats.html"
 SCHEDULE_URL = "https://www.sports-reference.com/cbb/schools/{}/men/{}-schedule.html"
 KENPOM_URL = "https://kenpom.com/index.php?y={}"
+
+##### Folders #####
 SCHEDULE_FOLDER = "./Stats/Schedules/{}"
+SEASONS_FOLDER = "./Stats/Seasons"
+
+##### Files #####
 TEAM_SCHEDULE_FILE = './Stats/Schedules/{}/{}_schedule.csv'
 YEAR_SCHEDULE_FILE = "./Stats/Schedules/{}_schedule.csv"
 SCHOOL_BASIC_SEASON_STATS_FILE = './Stats/Seasons/{}_school_season_stats.csv'
@@ -29,11 +35,15 @@ OPPONENT_BASIC_SEASON_STATS_FILE = './Stats/Seasons/{}_opponent_season_stats.csv
 OPPONENT_ADV_SEASON_STATS_FILE = './Stats/Seasons/{}_opponent_advanced_season_stats.csv'
 KENPOM_FILE = './Stats/Seasons/{}_kenpom.csv'
 DATABASE_FILE = 'Stats/stats.sqlite'
+
+## Years to get data for
 MIN_YEAR = 2002
 MAX_YEAR = 2023
 
 # Opponent Data only goes back to 2010
 MIN_OPPONENT_STATS_YEAR = 2010
+
+# Kenpom only goes back to 2002
 MIN_KENPOM_YEAR = 2002
 
 
@@ -503,6 +513,7 @@ def add_data_to_db(year: int, con: sqlite3.Connection):
 
 def main():
     """Main Function"""
+    system.createFolder(SEASONS_FOLDER)
     user_answer = input("Would you like to download school season statistics for sports reference? (y/n) ")
     if user_answer.upper() in ["Y"]:
         for year in range(MIN_YEAR, MAX_YEAR + 1):
