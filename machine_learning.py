@@ -1,8 +1,8 @@
 import sqlite3
 import datetime
 import sys
-import matplotlib.pyplot as plt
 import logging
+import matplotlib.pyplot as plt
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -19,13 +19,17 @@ from skops.io import dump, load, get_untrusted_types
 import system
 
 # Setup Logging
-logging.basicConfig(
-    filename="modelinfo.log",
-    filemode='a',
-    format='%(asctime)s; %(message)s',
-    datefmt='%H:%M:%S',
-    level=logging.INFO
-)
+models_logger = logging.getLogger('Model_Logger')
+models_logger.setLevel(logging.INFO)
+fh = logging.FileHandler('modelinfo.log')
+fh.setFormatter(
+        logging.Formatter(
+            '%(asctime)s; %(message)s',
+            datefmt='%H:%M:%S'
+        )
+    )
+fh.setLevel(logging.INFO)
+models_logger.addHandler(fh)
 
 STAT_COLUMNS_TO_USE = [
     'Overall G',
@@ -116,8 +120,6 @@ DATABASE_FILE = './Stats/stats.sqlite'
 
 SQLITE_CONNECTION = sqlite3.connect(DATABASE_FILE)
 
-MODEL_NAME = 'final_model.sav'
-
 
 def get_data(query: str, use_averages=False) -> pd.DataFrame:
     """Gets the data out of the SQLite database
@@ -190,7 +192,7 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     # Fill Blank win streaks with 0
     if 'Team 1 Streak' in df.columns.tolist():
         df['Team 1 Streak'].fillna(0)
-    
+
     if 'Team 2 Streak' in df.columns.tolist():
         df['Team 2 Streak'].fillna(0)
 
@@ -212,21 +214,25 @@ def train_model(df: pd.DataFrame):
     """
     # Result Dictionary so I can remember / output what models I have tried and ran, along with stats about it
     results = {
+        'pipeline': None,
+        'paramdict': None,
         'bestparams': None,
         'bestestimator': None,
-        'accuracy': None,
-        'precision': [None, None],
-        'recall': [None, None],
-        'f1score': [None, None],
-        'True Positives': None,
-        'False Positives': None,
-        'True Negatives': None,
-        'False Negatives':None
+        'Training Validation':{
+            'accuracy': None,
+            'precision': [None, None],
+            'recall': [None, None],
+            'f1score': [None, None],
+            'True Positives': None,
+            'False Positives': None,
+            'True Negatives': None,
+            'False Negatives':None
+        }
     }
 
     # Set up values for training
     y = df['Result']
-    X = df.drop(columns=['Result'])
+    x = df.drop(columns=['Result'])
 
     pipe = Pipeline([
         ('ss', StandardScaler()),
@@ -235,7 +241,7 @@ def train_model(df: pd.DataFrame):
         # ('classifier', MLPClassifier(max_iter=1000))
     ])
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
 
     param_dict = {
         # 'classifier__kernel': ['linear', 'poly', 'rbf', 'sigmoid', 'precomputed'],
@@ -245,21 +251,23 @@ def train_model(df: pd.DataFrame):
 
     grid_search = GridSearchCV(pipe, param_grid=[param_dict], n_jobs=2)
 
-    grid_search.fit(X_train, y_train)
+    grid_search.fit(x_train, y_train)
 
-    predictions = grid_search.predict(X_test)
+    predictions = grid_search.predict(x_test)
+
     cm = confusion_matrix(y_test, predictions)
-
+    results['pipeline'] = pipe
+    results['paramdict'] = param_dict
     results['bestparams'] = grid_search.best_params_
     results['bestestimator'] = grid_search.best_estimator_
-    results['precision'] = precision_score(y_test, predictions, average=None)
-    results['recall'] = recall_score(y_test, predictions, average=None)
-    results['accuracy'] = accuracy_score(y_test, predictions)
-    results['f1score'] = f1_score(y_test, predictions)
-    results['True Positives'] = cm[1][1]
-    results['False Positives'] = cm[0][1]
-    results['True Negatives'] = cm[0][0]
-    results['False Negatives'] = cm[1][0]
+    results['Training Validation']['precision'] = precision_score(y_test, predictions, average=None)
+    results['Training Validation']['recall'] = recall_score(y_test, predictions, average=None)
+    results['Training Validation']['accuracy'] = accuracy_score(y_test, predictions)
+    results['Training Validation']['f1score'] = f1_score(y_test, predictions)
+    results['Training Validation']['True Positives'] = cm[1][1]
+    results['Training Validation']['False Positives'] = cm[0][1]
+    results['Training Validation']['True Negatives'] = cm[0][0]
+    results['Training Validation']['False Negatives'] = cm[1][0]
 
 
     print(grid_search.best_params_)
@@ -270,12 +278,41 @@ def train_model(df: pd.DataFrame):
 
     print(classification_report(y_test, predictions))
 
-    display = ConfusionMatrixDisplay(confusion_matrix=cm)
-    display.plot()
-    plt.show()
-
-
     return grid_search, results
+
+
+def compare_model_against_ncaa(query: str, model):
+    """Takes the model and makes predictions against the march madness data that I have.
+
+    :param query: Query used to get the NCAA data. Must have columns that match the orginal traning
+    :type query: str
+
+    :param model: Model to validate
+    :type model: Sklearn Model
+
+    :return: Returns the results for the model for the log file
+    :rtype: dict
+    """
+    results = {}
+    df = get_data(query)
+    df = clean_data(df)
+
+    y = df['Result']
+    x = df.drop(columns=['Result'])
+
+    predictions = model.predict(x)
+    cm = confusion_matrix(y, predictions)
+
+    results['precision'] = precision_score(y, predictions, average=None)
+    results['recall'] = recall_score(y, predictions, average=None)
+    results['accuracy'] = accuracy_score(y, predictions)
+    results['f1score'] = f1_score(y, predictions)
+    results['True Positives'] = cm[1][1]
+    results['False Positives'] = cm[0][1]
+    results['True Negatives'] = cm[0][0]
+    results['False Negatives'] = cm[1][0]
+
+    return results
 
 
 def save_model(model, file_name: str = "my-model.skops"):
@@ -310,55 +347,78 @@ def load_model(file_name: str = "my-model.skops"):
 
     return load(file_name, trusted=True)
 
-
 def main():
     """Main Function"""
-
-    query = (
-        "SELECT "
-        "schst.Result, "
-        "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
-        f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in STAT_COLUMNS_TO_USE])}, "
-        f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in STAT_COLUMNS_TO_USE])} "
-        "FROM schedule_stats schst "
-        "INNER JOIN school_season_stats seast_team1 ON schst.`Team 1` = seast_team1.School AND schst.Year = seast_team1.Year "
-        "INNER JOIN school_season_stats seast_team2 ON schst.`Team 2` = seast_team2.School AND schst.Year = seast_team2.Year "
-        f"WHERE Type = 'REG'"
-    )
+    # Set up and parameters
     # query = (
     #     "SELECT "
     #     "schst.Result, "
     #     "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
-    #     f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in KENPOM_RANKINGS])}, "
-    #     f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in KENPOM_RANKINGS])} "
+    #     f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in STAT_COLUMNS_TO_USE])}, "
+    #     f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in STAT_COLUMNS_TO_USE])} "
     #     "FROM schedule_stats schst "
-    #     "INNER JOIN kenpom_stats seast_team1 ON schst.`Team 1` = seast_team1.Team AND schst.Year = seast_team1.Year "
-    #     "INNER JOIN kenpom_stats seast_team2 ON schst.`Team 2` = seast_team2.Team AND schst.Year = seast_team2.Year "
-    #     f"WHERE Type = 'REG'"
+    #     "INNER JOIN school_season_stats seast_team1 ON schst.`Team 1` = seast_team1.School AND schst.Year = seast_team1.Year "
+    #     "INNER JOIN school_season_stats seast_team2 ON schst.`Team 2` = seast_team2.School AND schst.Year = seast_team2.Year "
+    #     "WHERE Type = '{}'"
     # )
+    query = (
+        "SELECT "
+        "schst.Result, "
+        "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
+        f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in KENPOM_RANKINGS])}, "
+        f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in KENPOM_RANKINGS])} "
+        "FROM schedule_stats schst "
+        "INNER JOIN kenpom_stats seast_team1 ON schst.`Team 1` = seast_team1.Team AND schst.Year = seast_team1.Year "
+        "INNER JOIN kenpom_stats seast_team2 ON schst.`Team 2` = seast_team2.Team AND schst.Year = seast_team2.Year "
+        "WHERE Type = '{}'"
+    )
     system.createFolder('.models/')
-    model_file_name = 'models/' + datetime.datetime.now().strftime('%Y%m%d %H%m%S') + '_model.skops'
-    df = get_data(query, use_averages = True)
+    model_file_name = 'models/' + datetime.datetime.now().strftime('%Y%m%d %H%M%S') + '_model.skops'
+    use_averages = True
+
+    # Get Data
+    df = get_data(query.format('REG'))
     df = clean_data(df)
+
+    # Train Model
     model, results = train_model(df)
+
+    # Save Model
     save_model(model, model_file_name)
 
+    # Predict NCAA games for another step of validation
+    results['NCAA'] = compare_model_against_ncaa(query.format('NCAA'), model)
+
+    # Output results to logfile
+    results['use_averages'] = use_averages
     output_string_to_log = (
         f"Model Saved to: {model_file_name}\n"
         f"\tQuery: {query}\n"
+        f"\tUse Averages: {use_averages}\n"
         f"\tbestparams: {results['bestparams']}\n"
         f"\tbestestimator: {results['bestestimator']}\n"
-        f"\tprecision: {results['precision']}\n"
-        f"\trecall: {results['recall']}\n"
-        f"\taccuracy: {results['accuracy']}\n"
-        f"\tf1score: {results['f1score']}\n"
-        f"\tTrue Positives: {results['True Positives']}\n"
-        f"\tFalse Positives: {results['False Positives']}\n"
-        f"\tTrue Negatives: {results['True Negatives']}\n"
-        f"\tFalse Negatives: {results['False Negatives']}"
+        "\tTraining:\n"
+            f"\t\tprecision: {results['Training Validation']['precision']}\n"
+            f"\t\trecall: {results['Training Validation']['recall']}\n"
+            f"\t\taccuracy: {results['Training Validation']['accuracy']}\n"
+            f"\t\tf1score: {results['Training Validation']['f1score']}\n"
+            f"\t\tTrue Positives: {results['Training Validation']['True Positives']}\n"
+            f"\t\tFalse Positives: {results['Training Validation']['False Positives']}\n"
+            f"\t\tTrue Negatives: {results['Training Validation']['True Negatives']}\n"
+            f"\t\tFalse Negatives: {results['Training Validation']['False Negatives']}\n"
+        "\tNCAA:\n"
+            f"\t\tprecision: {results['NCAA']['precision']}\n"
+            f"\t\trecall: {results['NCAA']['recall']}\n"
+            f"\t\taccuracy: {results['NCAA']['accuracy']}\n"
+            f"\t\tf1score: {results['NCAA']['f1score']}\n"
+            f"\t\tTrue Positives: {results['NCAA']['True Positives']}\n"
+            f"\t\tFalse Positives: {results['NCAA']['False Positives']}\n"
+            f"\t\tTrue Negatives: {results['NCAA']['True Negatives']}\n"
+            f"\t\tFalse Negatives: {results['NCAA']['False Negatives']}"
+            "\n\n\n"
     )
 
-    logging.info(output_string_to_log)
+    models_logger.info(output_string_to_log)
 
 
 if __name__ == "__main__":
