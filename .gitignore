@@ -4,3 +4,5 @@ venv/
 /Stats
 temp.*
 *.skops
+models/
+modelinfo.csv

@@ -1,7 +1,9 @@
+"""Machine Learning Module"""
 import sqlite3
 import datetime
 import sys
 import logging
+import csv
 import matplotlib.pyplot as plt
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split, GridSearchCV
@@ -25,13 +27,13 @@ fh = logging.FileHandler('modelinfo.log')
 fh.setFormatter(
         logging.Formatter(
             '%(asctime)s; %(message)s',
-            datefmt='%H:%M:%S'
+            datefmt='%m/%d/%Y %H:%M:%S'
         )
     )
 fh.setLevel(logging.INFO)
 models_logger.addHandler(fh)
 
-STAT_COLUMNS_TO_USE = [
+SCHOOL_SEASON_STATS = [
     'Overall G',
     'Overall SRS',
     'Overall SOS',
@@ -69,7 +71,46 @@ STAT_COLUMNS_TO_USE = [
     'School Advanced FT/FGA',
 ]
 
-KENPOM_RANKINGS = [
+OPPONENT_SEASON_STATS = [
+    "Overall G",
+    "Overall SRS",
+    "Overall SOS",
+    "Points Tm.",
+    "Points Opp.",
+    "Opponent MP",
+    "Opponent FG",
+    "Opponent FGA",
+    "Opponent FG%",
+    "Opponent 3P",
+    "Opponent 3PA",
+    "Opponent 3P%",
+    "Opponent FT",
+    "Opponent FTA",
+    "Opponent FT%",
+    "Opponent ORB",
+    "Opponent TRB",
+    "Opponent AST",
+    "Opponent STL",
+    "Opponent BLK",
+    "Opponent TOV",
+    "Opponent PF",
+    "MadeTournament",
+    "Opponent Advanced Pace",
+    "Opponent Advanced ORtg",
+    "Opponent Advanced FTr",
+    "Opponent Advanced 3PAr",
+    "Opponent Advanced TS%",
+    "Opponent Advanced TRB%",
+    "Opponent Advanced AST%",
+    "Opponent Advanced STL%",
+    "Opponent Advanced BLK%",
+    "Opponent Advanced eFG%",
+    "Opponent Advanced TOV%",
+    "Opponent Advanced ORB%",
+    "Opponent Advanced FT/FGA",
+]
+
+KENPOM_STATS = [
     'AdjEM',
     'AdjO',
     'AdjD',
@@ -80,6 +121,20 @@ KENPOM_RANKINGS = [
     'Strength of Schedule_OppD',
     'NCSOS_AdjEM'
 ]
+
+RATINGS_SR_STATS = [
+    'Pts',
+    'Opp',
+    'MOV',
+    'SOS',
+    'SRS OSRS',
+    'SRS DSRS',
+    'SRS SRS',
+    'Adjusted ORtg',
+    'Adjusted DRtg',
+    'Adjusted NRtg'
+]
+
 
 AVERAGE_COLUMNS = [
     'Points Tm.', 
@@ -115,6 +170,7 @@ AVERAGE_COLUMNS = [
     'Oppontent TOV',
     'Oppontent PF',
 ]
+
 
 DATABASE_FILE = './Stats/stats.sqlite'
 
@@ -236,7 +292,8 @@ def train_model(df: pd.DataFrame):
 
     pipe = Pipeline([
         ('ss', StandardScaler()),
-        # ('pca', PCA()),
+        ('pca', PCA()),
+        # ('classifier', DecisionTreeClassifier())
         ('classifier', LogisticRegression(max_iter=1000))
         # ('classifier', MLPClassifier(max_iter=1000))
     ])
@@ -245,8 +302,8 @@ def train_model(df: pd.DataFrame):
 
     param_dict = {
         # 'classifier__kernel': ['linear', 'poly', 'rbf', 'sigmoid', 'precomputed'],
-        # 'classifier__max_depth': [4,8,12,20],
-        # 'pca__n_components': [1, 5,10, 15, 18]
+        # 'classifier__hidden_layer_sizes': [100,200,300,400,500,600,700,800,900,1000],
+        # 'pca__n_components': [1, 5, 10, 15, 18]
     }
 
     grid_search = GridSearchCV(pipe, param_grid=[param_dict], n_jobs=2)
@@ -273,7 +330,7 @@ def train_model(df: pd.DataFrame):
     return grid_search, results
 
 
-def compare_model_against_ncaa(query: str, model):
+def compare_model_against_ncaa(query: str, model, use_averages: bool):
     """Takes the model and makes predictions against the march madness data that I have.
 
     :param query: Query used to get the NCAA data. Must have columns that match the orginal traning
@@ -282,11 +339,14 @@ def compare_model_against_ncaa(query: str, model):
     :param model: Model to validate
     :type model: Sklearn Model
 
+    :param use_averages: Whether to use statistical averages in model
+    :type use_averages: bool
+
     :return: Returns the results for the model for the log file
     :rtype: dict
     """
     results = {}
-    df = get_data(query)
+    df = get_data(query, use_averages)
     df = clean_data(df)
 
     y = df['Result']
@@ -339,59 +399,32 @@ def load_model(file_name: str = "my-model.skops"):
 
     return load(file_name, trusted=True)
 
-def main():
-    """Main Function"""
-    # Set up and parameters
-    # query = (
-    #     "SELECT "
-    #     "schst.Result, "
-    #     "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
-    #     f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in STAT_COLUMNS_TO_USE])}, "
-    #     f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in STAT_COLUMNS_TO_USE])} "
-    #     "FROM schedule_stats schst "
-    #     "INNER JOIN school_season_stats seast_team1 ON schst.`Team 1` = seast_team1.School AND schst.Year = seast_team1.Year "
-    #     "INNER JOIN school_season_stats seast_team2 ON schst.`Team 2` = seast_team2.School AND schst.Year = seast_team2.Year "
-    #     "WHERE Type = '{}'"
-    # )
-    query = (
-        "SELECT "
-        "schst.Result, "
-        "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
-        f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in KENPOM_RANKINGS])}, "
-        f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in KENPOM_RANKINGS])} "
-        "FROM schedule_stats schst "
-        "INNER JOIN kenpom_stats seast_team1 ON schst.`Team 1` = seast_team1.Team AND schst.Year = seast_team1.Year "
-        "INNER JOIN kenpom_stats seast_team2 ON schst.`Team 2` = seast_team2.Team AND schst.Year = seast_team2.Year "
-        "WHERE Type = '{}'"
-    )
-    system.createFolder('./models/')
-    model_file_name = 'models/' + datetime.datetime.now().strftime('%Y%m%d %H%M%S') + '_model.skops'
-    use_averages = True
 
-    # Get Data
-    df = get_data(query.format('REG'))
-    df = clean_data(df)
+def output_results(results:dict, model_file_name: str, use_averages: bool, query: str):
+    """Outputs the results of the program to the logfile
 
-    # Train Model
-    model, results = train_model(df)
-
-    # Save Model
-    save_model(model, model_file_name)
-
-    # Predict NCAA games for another step of validation
-    results['NCAA'] = compare_model_against_ncaa(query.format('NCAA'), model)
+    :param results: Result Dictionary
+    :type results: dict
+    :param model_file_name: File name of the saved model
+    :type model_file_name: str
+    :param use_averages: Whether Season Averages were used
+    :type use_averages: bool
+    :param query: _description_
+    :type query: str
+    """
 
     # Output results to logfile
     results['use_averages'] = use_averages
+    pipeline_line_break = '\n               '
     output_string_to_log = (
         f"Model Saved to: {model_file_name}\n"
         f"\tQuery: {query}\n"
         f"\tUse Averages: {use_averages}\n"
         "\tModel Information:\n"
-            f"\t\tPipeline: {results['pipeline']}\n"
+            f"\t\tPipeline: {str(results['pipeline']).replace(pipeline_line_break, '')}\n"
             f"\t\tParam Dictionary: {results['paramdict']}\n"
             f"\t\tbestparams: {results['bestparams']}\n"
-            f"\t\tbestestimator: {results['bestestimator']}\n"
+            f"\t\tbestestimator: {str(results['bestestimator']).replace(pipeline_line_break, '')}\n"
         "\tTraining:\n"
             f"\t\tprecision: {results['Training Validation']['precision']}\n"
             f"\t\trecall: {results['Training Validation']['recall']}\n"
@@ -414,6 +447,110 @@ def main():
     )
 
     models_logger.info(output_string_to_log)
+
+    # Outputs Results to CSV as well
+    with open('modelinfo.csv', 'a', newline='') as file:
+        writer_object = csv.writer(file)
+
+        writer_object.writerow([
+            datetime.datetime.now().isoformat(),
+            model_file_name,
+            query,
+            use_averages,
+            str(results['pipeline']).replace(pipeline_line_break, ''),
+            results['paramdict'],
+            results['bestparams'],
+            str(results['bestestimator']).replace(pipeline_line_break, ''),
+            results['Training Validation']['precision'],
+            results['Training Validation']['recall'],
+            results['Training Validation']['accuracy'],
+            results['Training Validation']['f1score'],
+            results['Training Validation']['True Positives'],
+            results['Training Validation']['False Positives'],
+            results['Training Validation']['True Negatives'],
+            results['Training Validation']['False Negatives'],
+            results['NCAA']['precision'],
+            results['NCAA']['recall'],
+            results['NCAA']['accuracy'],
+            results['NCAA']['f1score'],
+            results['NCAA']['True Positives'],
+            results['NCAA']['False Positives'],
+            results['NCAA']['True Negatives'],
+            results['NCAA']['False Negatives']
+        ])
+
+        file.close()
+
+
+def main():
+    """Main Function"""
+    # Set up and parameters
+    # query = (
+    #     "SELECT "
+    #     "schst.Result, "
+    #     "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
+    #     f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in SCHOOL_SEASON_STATS])}, "
+    #     f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in SCHOOL_SEASON_STATS])} "
+    #     "FROM schedule_stats schst "
+    #     "INNER JOIN school_season_stats seast_team1 ON schst.`Team 1` = seast_team1.School AND schst.Year = seast_team1.Year "
+    #     "INNER JOIN school_season_stats seast_team2 ON schst.`Team 2` = seast_team2.School AND schst.Year = seast_team2.Year "
+    #     "WHERE Type = '{}'"
+    # )
+    # query = (
+    #     "SELECT "
+    #     "schst.Result, "
+    #     "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
+    #     f"{','.join(['school_stats1.`' + x + '` AS `SCHOOL_TEAM_1_' + x + '`' for x in SCHOOL_SEASON_STATS])}, "
+    #     f"{','.join(['school_stats2.`' + x + '` AS `SCHOOL_TEAM_2_' + x + '`'for x in SCHOOL_SEASON_STATS])}, "
+    #     f"{','.join(['opponent_stats1.`' + x + '` AS `OPPONENT_TEAM_1_' + x + '`' for x in OPPONENT_SEASON_STATS])}, "
+    #     f"{','.join(['opponent_stats2.`' + x + '` AS `OPPONENT_TEAM_2_' + x + '`'for x in OPPONENT_SEASON_STATS])} "
+    #     "FROM schedule_stats schst "
+    #     "INNER JOIN school_season_stats school_stats1 ON schst.`Team 1` = school_stats1.School AND schst.Year = school_stats1.Year "
+    #     "INNER JOIN school_season_stats school_stats2 ON schst.`Team 2` = school_stats2.School AND schst.Year = school_stats2.Year "
+    #     "INNER JOIN opponent_season_stats opponent_stats1 ON schst.`Team 1` = opponent_stats1.School AND schst.Year = opponent_stats1.Year "
+    #     "INNER JOIN opponent_season_stats opponent_stats2 ON schst.`Team 2` = opponent_stats2.School AND schst.Year = opponent_stats2.Year "
+    #     "WHERE Type = '{}' AND schst.Year >= 2010 "
+    # )
+    query = (
+        "SELECT "
+        "schst.Result, "
+        # "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
+        f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in KENPOM_STATS])}, "
+        f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in KENPOM_STATS])} "
+        "FROM schedule_stats schst "
+        "INNER JOIN kenpom_stats seast_team1 ON schst.`Team 1` = seast_team1.Team AND schst.Year = seast_team1.Year "
+        "INNER JOIN kenpom_stats seast_team2 ON schst.`Team 2` = seast_team2.Team AND schst.Year = seast_team2.Year "
+        "WHERE Type = '{}'"
+    )
+    # query = (
+    #     "SELECT "
+    #     "schst.Result, "
+    #     # "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
+    #     f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in RATING_COLUMNS])}, "
+    #     f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in RATING_COLUMNS])} "
+    #     "FROM schedule_stats schst "
+    #     "INNER JOIN ratings_sr seast_team1 ON schst.`Team 1` = seast_team1.School AND schst.Year = seast_team1.Year "
+    #     "INNER JOIN ratings_sr seast_team2 ON schst.`Team 2` = seast_team2.School AND schst.Year = seast_team2.Year "
+    #     "WHERE Type = '{}'"
+    # )
+    system.createFolder('./models/')
+    model_file_name = 'models/' + datetime.datetime.now().strftime('%Y%m%d %H%M%S') + '_model.skops'
+    use_averages = True
+
+    # Get Data
+    df = get_data(query.format('REG'), use_averages)
+    df = clean_data(df)
+
+    # Train Model
+    model, results = train_model(df)
+
+    # Save Model
+    save_model(model, model_file_name)
+
+    # Predict NCAA games for another step of validation
+    results['NCAA'] = compare_model_against_ncaa(query.format('NCAA'), model, use_averages)
+
+    output_results(results, model_file_name, use_averages, query)
 
 
 if __name__ == "__main__":

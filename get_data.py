@@ -1,4 +1,4 @@
-"""Scrapes Sports Reference for NCAA schedule data"""
+"""Scrapes Sports Reference and KenPom for NCAA statistical data"""
 import os
 import logging
 import time
@@ -19,6 +19,7 @@ SCHOOL_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-school-s
 SCHOOL_ADVANCED_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-advanced-school-stats.html"
 OPPONENT_SCHOOL_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-opponent-stats.html"
 OPPONENT_ADVANCED_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-advanced-opponent-stats.html"
+SPORTS_REFERENCE_RATINGS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-ratings.html"
 SCHEDULE_URL = "https://www.sports-reference.com/cbb/schools/{}/men/{}-schedule.html"
 KENPOM_URL = "https://kenpom.com/index.php?y={}"
 
@@ -33,6 +34,7 @@ SCHOOL_BASIC_SEASON_STATS_FILE = './Stats/Seasons/{}_school_season_stats.csv'
 SCHOOL_ADV_SEASON_STATS_FILE = './Stats/Seasons/{}_school_advanced_season_stats.csv'
 OPPONENT_BASIC_SEASON_STATS_FILE = './Stats/Seasons/{}_opponent_season_stats.csv'
 OPPONENT_ADV_SEASON_STATS_FILE = './Stats/Seasons/{}_opponent_advanced_season_stats.csv'
+SPORTS_REFERENCE_RATINGS_FILE = './Stats/Seasons/{}_ratings.csv'
 KENPOM_FILE = './Stats/Seasons/{}_kenpom.csv'
 DATABASE_FILE = 'Stats/stats.sqlite'
 
@@ -208,6 +210,55 @@ def get_advanced_season_data_from_sports_reference(year: int, page: str) -> pd.D
     df = df.drop(columns=[
         'Rk',
     ])
+
+    # Returns CSV
+    return df
+
+
+def get_ratings_from_sports_reference(year: int):
+    """Gets the ratings from sports reference
+
+    :param year: Year to get the data for
+    :type year: int
+    :return: _description_
+    :rtype: pd.Dataframe
+    """
+    # Gets Data
+    response = requests.get(SPORTS_REFERENCE_RATINGS_URL.format(year), timeout=None)
+
+    # Makes sure that there is no error
+    response.raise_for_status()
+
+    # Reads Data into DataFrame
+    df = pd.read_html(
+        response.text,
+        attrs={
+            'id': 'ratings'
+        }
+    )[0]
+
+    # Combines Columns into One Level
+    df.columns = df.columns.map(' '.join).str.strip('|')
+
+    # Renames Columns using regex
+    df.columns = df.columns.str.replace(
+        r'Unnamed: (\d+)_level_\d ',
+        '',
+        regex=True
+    )
+
+    # Drop columns that have all blanks
+    df = df.dropna(axis=1, how='all')
+
+    # Removes rows that are in the middle of the table
+    df = df[(df.Rk != 'Rk') & (pd.notna(df.Rk))]
+
+
+    # Drops Rank Column since it wasn't really helpful
+    df = df.drop(columns=[
+        'Rk',
+        'AP Rank'
+    ], errors='ignore')
 
     # Returns CSV
     return df
@@ -478,6 +529,10 @@ def add_data_to_db(year: int, con: sqlite3.Connection):
     schedule_df['Year'] = year
     schedule_df.to_sql('schedule_stats', con, if_exists='append', index=False)
 
+    school_ratings_df = pd.read_csv(SPORTS_REFERENCE_RATINGS_FILE.format(year))
+    school_ratings_df['Year'] = year
+    school_ratings_df.to_sql('ratings_sr', con, if_exists='append')
+
     if year >= MIN_KENPOM_YEAR:
         kenpom_df = pd.read_csv(KENPOM_FILE.format(year))
         kenpom_df['Year'] = year
@@ -532,7 +587,6 @@ def main():
             # The rate no more than 20 calls per minute. So I am putting a sleep on it, to call only 19 times in a minute
             time.sleep(60/19)
 
-
     user_answer = input("Would you like to download school advanced season statistics from sports reference? (y/n) ")
     if user_answer.upper() in ["Y"]:
         for year in range(MIN_YEAR, MAX_YEAR + 1):
@@ -547,6 +601,15 @@ def main():
         for year in range(max(MIN_OPPONENT_STATS_YEAR, MIN_YEAR), MAX_YEAR + 1):
             df = get_advanced_season_data_from_sports_reference(year, 'opponent')
             df.to_csv(OPPONENT_ADV_SEASON_STATS_FILE.format(year), index=False)
+            # Sports reference has a rate limiter on it.
+            # The rate no more than 20 calls per minute. So I am putting a sleep on it, to call only 19 times in a minute
+            time.sleep(60/19)
+
+    user_answer = input("Would you like to download rating information from sports reference? (y/n) ")
+    if user_answer.upper() in ["Y"]:
+        for year in range(max(MIN_YEAR, MIN_YEAR), MAX_YEAR + 1):
+            df = get_ratings_from_sports_reference(year)
+            df.to_csv(SPORTS_REFERENCE_RATINGS_FILE.format(year), index=False)
             # Sports reference has a rate limiter on it.
             # The rate no more than 20 calls per minute. So I am putting a sleep on it, to call only 19 times in a minute
             time.sleep(60/19)
@@ -566,7 +629,6 @@ def main():
             df.to_csv(KENPOM_FILE.format(year), index=False)
             time.sleep(60/19)
 
-
     user_answer = input("Would you like to add from the combine individual schedule results into a larger single season record? (y/n) ")
     if user_answer.upper() in ["Y"]:
         for year in range(MIN_YEAR, MAX_YEAR + 1):
@@ -582,7 +644,6 @@ def main():
                 add_data_to_db(year, con)
         except FileNotFoundError as exc:
             raise FileNotFoundError("All modes must have run in order to build a correct sqlite file.") from exc
-
 
     print("Program has finished")
 
