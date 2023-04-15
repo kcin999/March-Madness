@@ -15,6 +15,7 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier, StackingClassifier, VotingClassifier
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, precision_score, recall_score, accuracy_score, f1_score, classification_report
 import pandas as pd
 from skops.io import dump, load, get_untrusted_types
@@ -135,7 +136,6 @@ RATINGS_SR_STATS = [
     'Adjusted NRtg'
 ]
 
-
 AVERAGE_COLUMNS = [
     'Points Tm.', 
     'Points Opp.', 
@@ -171,7 +171,6 @@ AVERAGE_COLUMNS = [
     'Oppontent PF',
 ]
 
-
 DATABASE_FILE = './Stats/stats.sqlite'
 
 SQLITE_CONNECTION = sqlite3.connect(DATABASE_FILE)
@@ -202,6 +201,9 @@ def get_data(query: str, use_averages=False) -> pd.DataFrame:
         drop_columns_team_2 = []
 
         for column_name in df.columns.tolist():
+            if 'Overall G' in column_name :
+                drop_columns_team_1.append('TEAM_1_Overall G')
+                drop_columns_team_2.append('TEAM_2_Overall G')
             # Team 1 check
             column = column_name.replace('TEAM_1_', '')
             if column in AVERAGE_COLUMNS:
@@ -292,18 +294,21 @@ def train_model(df: pd.DataFrame):
 
     pipe = Pipeline([
         ('ss', StandardScaler()),
-        ('pca', PCA()),
-        # ('classifier', DecisionTreeClassifier())
-        ('classifier', LogisticRegression(max_iter=1000))
-        # ('classifier', MLPClassifier(max_iter=1000))
+        # ('pca', PCA()),
+        ('classifier', VotingClassifier(
+            estimators=[
+                ('logistic', LogisticRegression(max_iter=1000)),
+                ('tree', DecisionTreeClassifier()), 
+                ('ann', MLPClassifier(max_iter=1000))
+            ]
+        ))
     ])
 
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
 
     param_dict = {
-        # 'classifier__kernel': ['linear', 'poly', 'rbf', 'sigmoid', 'precomputed'],
-        # 'classifier__hidden_layer_sizes': [100,200,300,400,500,600,700,800,900,1000],
-        # 'pca__n_components': [1, 5, 10, 15, 18]
+        # 'classifier__solver': ['lbfgs', 'sgd', 'adam'],
+        # 'classifier__alpha': [0.0001, 0.001, 0.01, 0.1]
     }
 
     grid_search = GridSearchCV(pipe, param_grid=[param_dict], n_jobs=2)
@@ -485,7 +490,8 @@ def output_results(results:dict, model_file_name: str, use_averages: bool, query
 def main():
     """Main Function"""
     # Set up and parameters
-    # query = (
+
+    # school_stats_query = (
     #     "SELECT "
     #     "schst.Result, "
     #     "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
@@ -496,7 +502,7 @@ def main():
     #     "INNER JOIN school_season_stats seast_team2 ON schst.`Team 2` = seast_team2.School AND schst.Year = seast_team2.Year "
     #     "WHERE Type = '{}'"
     # )
-    # query = (
+    # school_and_opponent_stats = (
     #     "SELECT "
     #     "schst.Result, "
     #     "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
@@ -511,7 +517,7 @@ def main():
     #     "INNER JOIN opponent_season_stats opponent_stats2 ON schst.`Team 2` = opponent_stats2.School AND schst.Year = opponent_stats2.Year "
     #     "WHERE Type = '{}' AND schst.Year >= 2010 "
     # )
-    query = (
+    kenpom_stats_query = (
         "SELECT "
         "schst.Result, "
         # "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
@@ -522,12 +528,12 @@ def main():
         "INNER JOIN kenpom_stats seast_team2 ON schst.`Team 2` = seast_team2.Team AND schst.Year = seast_team2.Year "
         "WHERE Type = '{}'"
     )
-    # query = (
+    # sr_ratings_query = (
     #     "SELECT "
     #     "schst.Result, "
     #     # "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
-    #     f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in RATING_COLUMNS])}, "
-    #     f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in RATING_COLUMNS])} "
+    #     f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in RATINGS_SR_STATS])}, "
+    #     f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in RATINGS_SR_STATS])} "
     #     "FROM schedule_stats schst "
     #     "INNER JOIN ratings_sr seast_team1 ON schst.`Team 1` = seast_team1.School AND schst.Year = seast_team1.Year "
     #     "INNER JOIN ratings_sr seast_team2 ON schst.`Team 2` = seast_team2.School AND schst.Year = seast_team2.Year "
@@ -538,7 +544,7 @@ def main():
     use_averages = True
 
     # Get Data
-    df = get_data(query.format('REG'), use_averages)
+    df = get_data(kenpom_stats_query.format('REG'), use_averages)
     df = clean_data(df)
 
     # Train Model
@@ -548,9 +554,9 @@ def main():
     save_model(model, model_file_name)
 
     # Predict NCAA games for another step of validation
-    results['NCAA'] = compare_model_against_ncaa(query.format('NCAA'), model, use_averages)
+    results['NCAA'] = compare_model_against_ncaa(kenpom_stats_query.format('NCAA'), model, use_averages)
 
-    output_results(results, model_file_name, use_averages, query)
+    output_results(results, model_file_name, use_averages, kenpom_stats_query)
 
 
 if __name__ == "__main__":
