@@ -468,6 +468,7 @@ def get_kenpom_data(year: int) -> pd.DataFrame:
     df = df.dropna(how='any')
 
     df['Team'] = df['Team'].str.replace(r' \d+', '', regex=True)
+    df['Team'] = df['Team'].str.replace('*', '', regex=True)
 
     # Removes small ranking columns
     df = df.loc[:,~df.columns.duplicated()].copy()

@@ -384,17 +384,20 @@ def save_model(model, file_name: str = "my-model.skops"):
     dump(model, file_name)
 
 
-def load_model(file_name: str = "my-model.skops"):
+def load_model(file_name: str = "my-model.skops", override_trust=False):
     """Loads the model from the saved skops file
 
     :param file_name: filename in which the model is currently loaded, defaults to "my-model.skops"
     :type file_name: str, optional
 
+    :param override_trust: Whether to override the trust connection, defaults to False
+    :type override_trust: bool, optional
+
     :return: Sklearn model which can be used
     :rtype: sklearn.Model
     """
     unknown_types = get_untrusted_types(file=file_name)
-    if unknown_types:
+    if unknown_types and not override_trust:
         print("The following fields were deemed untrusted.")
         print(unknown_types)
         user_input = input("Would you like to continue? (y/n): ")
