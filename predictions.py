@@ -25,7 +25,7 @@ class GUI():
     """GUI for predictions"""
     TEAM_LIST = get_team_list()
     def __init__(self, model: str = None):
-        """_summary_
+        """Init Function
 
         :param model: Machine Learning Model to load, defaults to None
         :type model: str, optional

@@ -284,7 +284,8 @@ def train_model(df: pd.DataFrame):
             'True Positives': None,
             'False Positives': None,
             'True Negatives': None,
-            'False Negatives':None
+            'False Negatives':None,
+            'Other Features': None
         }
     }
 
@@ -302,7 +303,7 @@ def train_model(df: pd.DataFrame):
         #         ('ann', MLPClassifier(max_iter=1000))
         #     ]
         # ))
-        ('classifier', LogisticRegression(max_iter=1000))
+        ('classifier', RandomForestClassifier(n_estimators=1))
     ])
 
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
@@ -332,6 +333,9 @@ def train_model(df: pd.DataFrame):
     results['Training Validation']['True Negatives'] = cm[0][0]
     results['Training Validation']['False Negatives'] = cm[1][0]
 
+    # Model Specific Outputs
+    if isinstance(grid_search.best_estimator_['classifier'], RandomForestClassifier):
+        results['Training Validation']['Other Features'] = grid_search.best_estimator_['classifier'].feature_importances_
 
     return grid_search, results
 
@@ -424,16 +428,17 @@ def output_results(results:dict, model_file_name: str, use_averages: bool, query
 
     # Output results to logfile
     results['use_averages'] = use_averages
-    pipeline_line_break = '\n               '
+    pipeline_line_break_with_spaces = '\n               '
+    pipeline_line_break = '\n'
     output_string_to_log = (
         f"Model Saved to: {model_file_name}\n"
         f"\tQuery: {query}\n"
         f"\tUse Averages: {use_averages}\n"
         "\tModel Information:\n"
-            f"\t\tPipeline: {str(results['pipeline']).replace(pipeline_line_break, '')}\n"
+            f"\t\tPipeline: {str(results['pipeline']).replace(pipeline_line_break_with_spaces, '')}\n"
             f"\t\tParam Dictionary: {results['paramdict']}\n"
             f"\t\tbestparams: {results['bestparams']}\n"
-            f"\t\tbestestimator: {str(results['bestestimator']).replace(pipeline_line_break, '')}\n"
+            f"\t\tbestestimator: {str(results['bestestimator']).replace(pipeline_line_break_with_spaces, '')}\n"
         "\tTraining:\n"
             f"\t\tprecision: {results['Training Validation']['precision']}\n"
             f"\t\trecall: {results['Training Validation']['recall']}\n"
@@ -443,6 +448,7 @@ def output_results(results:dict, model_file_name: str, use_averages: bool, query
             f"\t\tFalse Positives: {results['Training Validation']['False Positives']}\n"
             f"\t\tTrue Negatives: {results['Training Validation']['True Negatives']}\n"
             f"\t\tFalse Negatives: {results['Training Validation']['False Negatives']}\n"
+            f"\t\tOther Features: {str(results['Training Validation']['Other Features']).replace(pipeline_line_break, '')}\n"
         "\tNCAA:\n"
             f"\t\tprecision: {results['NCAA']['precision']}\n"
             f"\t\trecall: {results['NCAA']['recall']}\n"
@@ -466,10 +472,10 @@ def output_results(results:dict, model_file_name: str, use_averages: bool, query
             model_file_name,
             query,
             use_averages,
-            str(results['pipeline']).replace(pipeline_line_break, ''),
+            str(results['pipeline']).replace(pipeline_line_break_with_spaces, ''),
             results['paramdict'],
             results['bestparams'],
-            str(results['bestestimator']).replace(pipeline_line_break, ''),
+            str(results['bestestimator']).replace(pipeline_line_break_with_spaces, ''),
             results['Training Validation']['precision'],
             results['Training Validation']['recall'],
             results['Training Validation']['accuracy'],
@@ -485,7 +491,8 @@ def output_results(results:dict, model_file_name: str, use_averages: bool, query
             results['NCAA']['True Positives'],
             results['NCAA']['False Positives'],
             results['NCAA']['True Negatives'],
-            results['NCAA']['False Negatives']
+            results['NCAA']['False Negatives'],
+            str(results['Training Validation']['Other Features']).replace(pipeline_line_break, '')
         ])
 
         file.close()
