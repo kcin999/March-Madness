@@ -295,13 +295,14 @@ def train_model(df: pd.DataFrame):
     pipe = Pipeline([
         ('ss', StandardScaler()),
         # ('pca', PCA()),
-        ('classifier', VotingClassifier(
-            estimators=[
-                ('logistic', LogisticRegression(max_iter=1000)),
-                ('tree', DecisionTreeClassifier()), 
-                ('ann', MLPClassifier(max_iter=1000))
-            ]
-        ))
+        # ('classifier', VotingClassifier(
+        #     estimators=[
+        #         ('logistic', LogisticRegression(max_iter=1000)),
+        #         ('tree', DecisionTreeClassifier()), 
+        #         ('ann', MLPClassifier(max_iter=1000))
+        #     ]
+        # ))
+        ('classifier', LogisticRegression(max_iter=1000))
     ])
 
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
@@ -527,8 +528,10 @@ def main():
         f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in KENPOM_STATS])}, "
         f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in KENPOM_STATS])} "
         "FROM schedule_stats schst "
-        "INNER JOIN kenpom_stats seast_team1 ON schst.`Team 1` = seast_team1.Team AND schst.Year = seast_team1.Year "
-        "INNER JOIN kenpom_stats seast_team2 ON schst.`Team 2` = seast_team2.Team AND schst.Year = seast_team2.Year "
+        "INNER JOIN team_mapping team_map1 ON schst.`Team 1` = team_map1.`Sports Reference` "
+        "INNER JOIN team_mapping team_map2 ON schst.`Team 2` = team_map2.`Sports Reference` "
+        "INNER JOIN kenpom_stats seast_team1 ON seast_team1.Team = team_map1.Kenpom AND schst.Year = seast_team1.Year "
+        "INNER JOIN kenpom_stats seast_team2 ON seast_team2.Team = team_map2.Kenpom AND schst.Year = seast_team2.Year "
         "WHERE Type = '{}'"
     )
     # sr_ratings_query = (

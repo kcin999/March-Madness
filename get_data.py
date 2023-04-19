@@ -643,6 +643,10 @@ def main():
         try:
             for year in range(MIN_YEAR, MAX_YEAR + 1):
                 add_data_to_db(year, con)
+
+            # Team Mapping
+            team_mapping_df = pd.read_csv('team_mapping.csv')
+            team_mapping_df.to_sql('team_mapping', con, if_exists='append', index=False)
         except FileNotFoundError as exc:
             raise FileNotFoundError("All modes must have run in order to build a correct sqlite file.") from exc
 

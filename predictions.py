@@ -24,8 +24,13 @@ TEAM_LIST = get_team_list()
 class GUI():
     """GUI for predictions"""
     TEAM_LIST = get_team_list()
-    def __init__(self):
-        self.model = load_model(override_trust = True)
+    def __init__(self, model: str = None):
+        """_summary_
+
+        :param model: Machine Learning Model to load, defaults to None
+        :type model: str, optional
+        """
+        self.model = load_model(model, override_trust = True)
 
         self.root = tk.Tk()
 
@@ -87,15 +92,23 @@ class GUI():
         """Makes the prediction"""
         df = self.get_team_data()
         predictions = self.model.predict(df)[0]
-        predictions_probabilities = self.model.predict_proba(df)[0]
+
+        try:
+            predictions_probabilities = self.model.predict_proba(df)[0]
+        except AttributeError:
+            predictions_probabilities = False
 
         if predictions == 1:
             self.prediction.set(f"{self.team1.get()} is predicited to beat {self.team2.get()}")
         else:
             self.prediction.set(f"{self.team1.get()} is predicited to lose to {self.team2.get()}")
 
-        self.team2_percentage.set(f"{self.team2.get()} has an assigned {predictions_probabilities[0]:.2%} to win")
-        self.team1_percentage.set(f"{self.team1.get()} has an assigned {predictions_probabilities[1]:.2%} to win")
+        if predictions_probabilities:
+            self.team2_percentage.set(f"{self.team2.get()} has an assigned {predictions_probabilities[0]:.2%} to win")
+            self.team1_percentage.set(f"{self.team1.get()} has an assigned {predictions_probabilities[1]:.2%} to win")
+        else:
+            self.team1_percentage.set("Percentages could not be predicted with the chosen model")
+            self.team2_percentage.set("")
 
 
     def get_team_data(self):
@@ -127,7 +140,6 @@ class GUI():
 
 
         df = get_data(query,True)
-        print(df)
         df = clean_data(df)
 
         return df
