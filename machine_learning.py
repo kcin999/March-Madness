@@ -154,21 +154,21 @@ AVERAGE_COLUMNS = [
     'Totals BLK',
     'Totals TOV',
     'Totals PF',
-    'Oppontent MP', 
-    'Oppontent FG', 
-    'Oppontent FGA', 
-    'Oppontent 3P', 
-    'Oppontent 3PA', 
-    'Oppontent FT',
-    'Oppontent FTA',
-    'Oppontent ORB',
-    'Oppontent TRB',
-    'Oppontent AST',
-    'Oppontent AST',
-    'Oppontent STL',
-    'Oppontent BLK',
-    'Oppontent TOV',
-    'Oppontent PF',
+    'Opponent MP', 
+    'Opponent FG', 
+    'Opponent FGA', 
+    'Opponent 3P', 
+    'Opponent 3PA', 
+    'Opponent FT',
+    'Opponent FTA',
+    'Opponent ORB',
+    'Opponent TRB',
+    'Opponent AST',
+    'Opponent AST',
+    'Opponent STL',
+    'Opponent BLK',
+    'Opponent TOV',
+    'Opponent PF',
 ]
 
 DATABASE_FILE = './Stats/stats.sqlite'
@@ -201,20 +201,36 @@ def get_data(query: str, use_averages=False) -> pd.DataFrame:
         drop_columns_team_2 = []
 
         for column_name in df.columns.tolist():
-            if 'Overall G' in column_name :
-                drop_columns_team_1.append('TEAM_1_Overall G')
-                drop_columns_team_2.append('TEAM_2_Overall G')
+            if 'Overall G' in column_name and 'TEAM_1' in column_name:
+                drop_columns_team_1.append(column_name)
+
+            if 'Overall G' in column_name and 'TEAM_2' in column_name:
+                drop_columns_team_2.append(column_name)
+
+
             # Team 1 check
-            column = column_name.replace('TEAM_1_', '')
-            if column in AVERAGE_COLUMNS:
-                df['TEAM_1_' + column.replace('Totals', 'Average')] = df['TEAM_1_' + column] / df['TEAM_1_Overall G']
-                drop_columns_team_1.append('TEAM_1_' + column)
+            column = column_name.replace('SCHOOL_TEAM_1_', '')
+            column = column.replace('OPPONENT_TEAM_1_', '')
+            column = column.replace('TEAM_1_', '')
+            if column in AVERAGE_COLUMNS and 'SCHOOL' in column_name:
+                df[column_name.replace('Totals', 'Average')] = df[column_name] / df['SCHOOL_TEAM_1_Overall G']
+                drop_columns_team_1.append(column_name)
+
+            if column in AVERAGE_COLUMNS and 'OPPONENT' in column_name:
+                df[column_name.replace('Totals', 'Average')] = df[column_name] / df['OPPONENT_TEAM_1_Overall G']
+                drop_columns_team_1.append(column_name)
 
             # Team 2 Check
-            column = column_name.replace('TEAM_2_', '')
-            if column in AVERAGE_COLUMNS:
-                df['TEAM_2_' + column.replace('Totals', 'Average')] = df['TEAM_2_' + column] / df['TEAM_2_Overall G']
-                drop_columns_team_2.append('TEAM_2_' + column)
+            column = column_name.replace('SCHOOL_TEAM_2_', '')
+            column = column.replace('OPPONENT_TEAM_2_', '')
+            column = column.replace('TEAM_2_', '')
+            if column in AVERAGE_COLUMNS and 'SCHOOL' in column_name:
+                df[column_name.replace('Totals', 'Average')] = df[column_name] / df['SCHOOL_TEAM_1_Overall G']
+                drop_columns_team_2.append(column_name)
+
+            if column in AVERAGE_COLUMNS and 'OPPONENT' in column_name:
+                df[column_name.replace('Totals', 'Average')] = df[column_name] / df['OPPONENT_TEAM_1_Overall G']
+                drop_columns_team_2.append(column_name)
 
         # Drop undeeded columns
         df = df.drop(columns=[x for x in drop_columns_team_1])
@@ -502,35 +518,35 @@ def main():
     """Main Function"""
     # Set up and parameters
 
-    query = (
-        "SELECT "
-        "schst.Result, "
-        # "schst.`Team 1 Streak` AS SCHOOL_TEAM_1 Streak, "
-        # "schst.`Team 2 Streak` AS SCHOOL_TEAM_2_Streak, "
-        f"{','.join(['seast_team1.`' + x + '` AS `SCHOOL_TEAM_1_' + x + '`' for x in SCHOOL_SEASON_STATS])}, "
-        f"{','.join(['seast_team2.`' + x + '` AS `SCHOOL_TEAM_2_' + x + '`'for x in SCHOOL_SEASON_STATS])} "
-        "FROM schedule_stats schst "
-        "INNER JOIN school_season_stats seast_team1 ON schst.`Team 1` = seast_team1.School AND schst.Year = seast_team1.Year "
-        "INNER JOIN school_season_stats seast_team2 ON schst.`Team 2` = seast_team2.School AND schst.Year = seast_team2.Year "
-        "WHERE Type = '{}'"
-    )
-
     # query = (
     #     "SELECT "
     #     "schst.Result, "
     #     # "schst.`Team 1 Streak` AS SCHOOL_TEAM_1 Streak, "
     #     # "schst.`Team 2 Streak` AS SCHOOL_TEAM_2_Streak, "
-    #     f"{','.join(['school_stats1.`' + x + '` AS `SCHOOL_TEAM_1_' + x + '`' for x in SCHOOL_SEASON_STATS])}, "
-    #     f"{','.join(['school_stats2.`' + x + '` AS `SCHOOL_TEAM_2_' + x + '`'for x in SCHOOL_SEASON_STATS])}, "
-    #     f"{','.join(['opponent_stats1.`' + x + '` AS `OPPONENT_TEAM_1_' + x + '`' for x in OPPONENT_SEASON_STATS])}, "
-    #     f"{','.join(['opponent_stats2.`' + x + '` AS `OPPONENT_TEAM_2_' + x + '`'for x in OPPONENT_SEASON_STATS])} "
+    #     f"{','.join(['seast_team1.`' + x + '` AS `SCHOOL_TEAM_1_' + x + '`' for x in SCHOOL_SEASON_STATS])}, "
+    #     f"{','.join(['seast_team2.`' + x + '` AS `SCHOOL_TEAM_2_' + x + '`'for x in SCHOOL_SEASON_STATS])} "
     #     "FROM schedule_stats schst "
-    #     "INNER JOIN school_season_stats school_stats1 ON schst.`Team 1` = school_stats1.School AND schst.Year = school_stats1.Year "
-    #     "INNER JOIN school_season_stats school_stats2 ON schst.`Team 2` = school_stats2.School AND schst.Year = school_stats2.Year "
-    #     "INNER JOIN opponent_season_stats opponent_stats1 ON schst.`Team 1` = opponent_stats1.School AND schst.Year = opponent_stats1.Year "
-    #     "INNER JOIN opponent_season_stats opponent_stats2 ON schst.`Team 2` = opponent_stats2.School AND schst.Year = opponent_stats2.Year "
-    #     "WHERE Type = '{}' AND schst.Year >= 2010 "
+    #     "INNER JOIN school_season_stats seast_team1 ON schst.`Team 1` = seast_team1.School AND schst.Year = seast_team1.Year "
+    #     "INNER JOIN school_season_stats seast_team2 ON schst.`Team 2` = seast_team2.School AND schst.Year = seast_team2.Year "
+    #     "WHERE Type = '{}'"
     # )
+
+    query = (
+        "SELECT "
+        "schst.Result, "
+        # "schst.`Team 1 Streak` AS SCHOOL_TEAM_1 Streak, "
+        # "schst.`Team 2 Streak` AS SCHOOL_TEAM_2_Streak, "
+        f"{','.join(['school_stats1.`' + x + '` AS `SCHOOL_TEAM_1_' + x + '`' for x in SCHOOL_SEASON_STATS])}, "
+        f"{','.join(['school_stats2.`' + x + '` AS `SCHOOL_TEAM_2_' + x + '`'for x in SCHOOL_SEASON_STATS])}, "
+        f"{','.join(['opponent_stats1.`' + x + '` AS `OPPONENT_TEAM_1_' + x + '`' for x in OPPONENT_SEASON_STATS])}, "
+        f"{','.join(['opponent_stats2.`' + x + '` AS `OPPONENT_TEAM_2_' + x + '`'for x in OPPONENT_SEASON_STATS])} "
+        "FROM schedule_stats schst "
+        "INNER JOIN school_season_stats school_stats1 ON schst.`Team 1` = school_stats1.School AND schst.Year = school_stats1.Year "
+        "INNER JOIN school_season_stats school_stats2 ON schst.`Team 2` = school_stats2.School AND schst.Year = school_stats2.Year "
+        "INNER JOIN opponent_season_stats opponent_stats1 ON schst.`Team 1` = opponent_stats1.School AND schst.Year = opponent_stats1.Year "
+        "INNER JOIN opponent_season_stats opponent_stats2 ON schst.`Team 2` = opponent_stats2.School AND schst.Year = opponent_stats2.Year "
+        "WHERE Type = '{}' AND schst.Year >= 2010 "
+    )
 
     # query = (
     #     "SELECT "
