@@ -502,21 +502,24 @@ def main():
     """Main Function"""
     # Set up and parameters
 
-    # school_stats_query = (
+    query = (
+        "SELECT "
+        "schst.Result, "
+        # "schst.`Team 1 Streak` AS SCHOOL_TEAM_1 Streak, "
+        # "schst.`Team 2 Streak` AS SCHOOL_TEAM_2_Streak, "
+        f"{','.join(['seast_team1.`' + x + '` AS `SCHOOL_TEAM_1_' + x + '`' for x in SCHOOL_SEASON_STATS])}, "
+        f"{','.join(['seast_team2.`' + x + '` AS `SCHOOL_TEAM_2_' + x + '`'for x in SCHOOL_SEASON_STATS])} "
+        "FROM schedule_stats schst "
+        "INNER JOIN school_season_stats seast_team1 ON schst.`Team 1` = seast_team1.School AND schst.Year = seast_team1.Year "
+        "INNER JOIN school_season_stats seast_team2 ON schst.`Team 2` = seast_team2.School AND schst.Year = seast_team2.Year "
+        "WHERE Type = '{}'"
+    )
+
+    # query = (
     #     "SELECT "
     #     "schst.Result, "
-    #     "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
-    #     f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in SCHOOL_SEASON_STATS])}, "
-    #     f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in SCHOOL_SEASON_STATS])} "
-    #     "FROM schedule_stats schst "
-    #     "INNER JOIN school_season_stats seast_team1 ON schst.`Team 1` = seast_team1.School AND schst.Year = seast_team1.Year "
-    #     "INNER JOIN school_season_stats seast_team2 ON schst.`Team 2` = seast_team2.School AND schst.Year = seast_team2.Year "
-    #     "WHERE Type = '{}'"
-    # )
-    # school_and_opponent_stats = (
-    #     "SELECT "
-    #     "schst.Result, "
-    #     "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
+    #     # "schst.`Team 1 Streak` AS SCHOOL_TEAM_1 Streak, "
+    #     # "schst.`Team 2 Streak` AS SCHOOL_TEAM_2_Streak, "
     #     f"{','.join(['school_stats1.`' + x + '` AS `SCHOOL_TEAM_1_' + x + '`' for x in SCHOOL_SEASON_STATS])}, "
     #     f"{','.join(['school_stats2.`' + x + '` AS `SCHOOL_TEAM_2_' + x + '`'for x in SCHOOL_SEASON_STATS])}, "
     #     f"{','.join(['opponent_stats1.`' + x + '` AS `OPPONENT_TEAM_1_' + x + '`' for x in OPPONENT_SEASON_STATS])}, "
@@ -528,36 +531,39 @@ def main():
     #     "INNER JOIN opponent_season_stats opponent_stats2 ON schst.`Team 2` = opponent_stats2.School AND schst.Year = opponent_stats2.Year "
     #     "WHERE Type = '{}' AND schst.Year >= 2010 "
     # )
-    kenpom_stats_query = (
-        "SELECT "
-        "schst.Result, "
-        # "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
-        f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in KENPOM_STATS])}, "
-        f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in KENPOM_STATS])} "
-        "FROM schedule_stats schst "
-        "INNER JOIN team_mapping team_map1 ON schst.`Team 1` = team_map1.`Sports Reference` "
-        "INNER JOIN team_mapping team_map2 ON schst.`Team 2` = team_map2.`Sports Reference` "
-        "INNER JOIN kenpom_stats seast_team1 ON seast_team1.Team = team_map1.Kenpom AND schst.Year = seast_team1.Year "
-        "INNER JOIN kenpom_stats seast_team2 ON seast_team2.Team = team_map2.Kenpom AND schst.Year = seast_team2.Year "
-        "WHERE Type = '{}'"
-    )
-    # sr_ratings_query = (
+
+    # query = (
     #     "SELECT "
     #     "schst.Result, "
     #     # "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
-    #     f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in RATINGS_SR_STATS])}, "
-    #     f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in RATINGS_SR_STATS])} "
+    #     f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in KENPOM_STATS])}, "
+    #     f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in KENPOM_STATS])} "
+    #     "FROM schedule_stats schst "
+    #     "INNER JOIN team_mapping team_map1 ON schst.`Team 1` = team_map1.`Sports Reference` "
+    #     "INNER JOIN team_mapping team_map2 ON schst.`Team 2` = team_map2.`Sports Reference` "
+    #     "INNER JOIN kenpom_stats seast_team1 ON seast_team1.Team = team_map1.Kenpom AND schst.Year = seast_team1.Year "
+    #     "INNER JOIN kenpom_stats seast_team2 ON seast_team2.Team = team_map2.Kenpom AND schst.Year = seast_team2.Year "
+    #     "WHERE Type = '{}'"
+    # )
+    # query = (
+    #     "SELECT "
+    #     "schst.Result, "
+    #     # "schst.`Team 1 Streak` AS SCHOOL_TEAM_1 Streak, "
+    #     # "schst.`Team 2 Streak` AS SCHOOL_TEAM_2_Streak, "
+    #     f"{','.join(['seast_team1.`' + x + '` AS `SCHOOL_TEAM_1_' + x + '`' for x in RATINGS_SR_STATS])}, "
+    #     f"{','.join(['seast_team2.`' + x + '` AS `SCHOOL_TEAM_2_' + x + '`'for x in RATINGS_SR_STATS])} "
     #     "FROM schedule_stats schst "
     #     "INNER JOIN ratings_sr seast_team1 ON schst.`Team 1` = seast_team1.School AND schst.Year = seast_team1.Year "
     #     "INNER JOIN ratings_sr seast_team2 ON schst.`Team 2` = seast_team2.School AND schst.Year = seast_team2.Year "
     #     "WHERE Type = '{}'"
     # )
+
     system.createFolder('./models/')
     model_file_name = 'models/' + datetime.datetime.now().strftime('%Y%m%d %H%M%S') + '_model.skops'
     use_averages = True
 
     # Get Data
-    df = get_data(kenpom_stats_query.format('REG'), use_averages)
+    df = get_data(query.format('REG'), use_averages)
     df = clean_data(df)
 
     # Train Model
@@ -567,9 +573,9 @@ def main():
     save_model(model, model_file_name)
 
     # Predict NCAA games for another step of validation
-    results['NCAA'] = compare_model_against_ncaa(kenpom_stats_query.format('NCAA'), model, use_averages)
+    results['NCAA'] = compare_model_against_ncaa(query.format('NCAA'), model, use_averages)
 
-    output_results(results, model_file_name, use_averages, kenpom_stats_query)
+    output_results(results, model_file_name, use_averages, query)
 
 
 if __name__ == "__main__":
