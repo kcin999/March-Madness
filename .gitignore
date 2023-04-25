@@ -2,7 +2,8 @@ venv/
 *.log
 *.pyc
 /Stats
-temp.*
+temp*
 *.skops
 models/
 modelinfo.csv
+.vscode/

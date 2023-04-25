@@ -19,8 +19,6 @@ def get_team_list() -> list:
     )
     return df.sort_values('Team')['Team'].values.tolist()
 
-TEAM_LIST = get_team_list()
-
 class GUI():
     """GUI for predictions"""
     TEAM_LIST = get_team_list()
@@ -52,12 +50,12 @@ class GUI():
         selection_frame = tk.Frame(self.root, width=200, height=400)
 
         team1_label = ttk.Label(selection_frame, text="Select Team 1")
-        team1_selection = ttk.Combobox(selection_frame, values=TEAM_LIST, textvariable=self.team1)
+        team1_selection = ttk.Combobox(selection_frame, values=self.TEAM_LIST, textvariable=self.team1)
         team1_label.grid(row=0, column=0)
         team1_selection.grid(row=1, column=0)
 
         team2_label = ttk.Label(selection_frame, text="Select Team 2")
-        team2_selection = ttk.Combobox(selection_frame, values=TEAM_LIST, textvariable=self.team2)
+        team2_selection = ttk.Combobox(selection_frame, values=self.TEAM_LIST, textvariable=self.team2)
         team2_label.grid(row=0, column=1)
         team2_selection.grid(row=1, column=1)
 
@@ -92,18 +90,18 @@ class GUI():
         """Makes the prediction"""
         df = self.get_team_data()
         predictions = self.model.predict(df)[0]
-
+        use_prediction_probs = True
         try:
             predictions_probabilities = self.model.predict_proba(df)[0]
         except AttributeError:
-            predictions_probabilities = False
+            use_prediction_probs = False
 
         if predictions == 1:
             self.prediction.set(f"{self.team1.get()} is predicited to beat {self.team2.get()}")
         else:
             self.prediction.set(f"{self.team1.get()} is predicited to lose to {self.team2.get()}")
 
-        if predictions_probabilities:
+        if use_prediction_probs:
             self.team2_percentage.set(f"{self.team2.get()} has an assigned {predictions_probabilities[0]:.2%} to win")
             self.team1_percentage.set(f"{self.team1.get()} has an assigned {predictions_probabilities[1]:.2%} to win")
         else:
