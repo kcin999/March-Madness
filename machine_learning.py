@@ -519,6 +519,7 @@ def main():
     """Main Function"""
     # Set up and parameters
 
+    ##### Sports Reference School Only Data #####
     # query = (
     #     "SELECT "
     #     "schst.Result, "
@@ -532,6 +533,7 @@ def main():
     #     "WHERE Type = '{}'"
     # )
 
+    ##### All Datasets #####
     query = (
         "SELECT "
         "schst.Result, "
@@ -559,6 +561,7 @@ def main():
         "WHERE Type = '{}' AND schst.Year >= 2010 "
     )
 
+    ##### KenPom Data #####
     # query = (
     #     "SELECT "
     #     "schst.Result, "
@@ -572,6 +575,8 @@ def main():
     #     "INNER JOIN kenpom_stats seast_team2 ON seast_team2.Team = team_map2.Kenpom AND schst.Year = seast_team2.Year "
     #     "WHERE Type = '{}'"
     # )
+
+    ##### Sports Reference Ratings #####
     # query = (
     #     "SELECT "
     #     "schst.Result, "
