@@ -311,21 +311,22 @@ def train_model(df: pd.DataFrame):
 
     pipe = Pipeline([
         ('ss', StandardScaler()),
-        # ('pca', PCA()),
-        # ('classifier', VotingClassifier(
+        ('pca', PCA(n_components=15)),
+        # ('classifier', StackingClassifier(
         #     estimators=[
         #         ('logistic', LogisticRegression(max_iter=1000)),
         #         ('tree', DecisionTreeClassifier()), 
         #         ('ann', MLPClassifier(max_iter=1000))
         #     ]
         # ))
-        ('classifier', RandomForestClassifier(n_estimators=200))
-        # ('classifier', LogisticRegression(max_iter=1000))
+        # ('classifier', RandomForestClassifier(n_estimators=200))
+        ('classifier', LogisticRegression(max_iter=1000))
     ])
 
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
 
     param_dict = {
+        # 'pca__n_components': [1,5,10,15,35],
         # 'classifier__solver': ['lbfgs', 'sgd', 'adam'],
         # 'classifier__alpha': [0.0001, 0.001, 0.01, 0.1]
     }
@@ -430,7 +431,7 @@ def load_model(file_name: str = "my-model.skops", override_trust=False):
     return load(file_name, trusted=True)
 
 
-def output_results(results:dict, model_file_name: str, use_averages: bool, query: str):
+def output_results(results:dict, model_file_name: str, use_averages: bool, query: str, trained_with: str):
     """Outputs the results of the program to the logfile
 
     :param results: Result Dictionary
@@ -439,23 +440,25 @@ def output_results(results:dict, model_file_name: str, use_averages: bool, query
     :type model_file_name: str
     :param use_averages: Whether Season Averages were used
     :type use_averages: bool
-    :param query: _description_
+    :param query: Query used to get data
     :type query: str
+    :param trained_with: Type of game used to train the model
+    :type trained_with: str
     """
 
     # Output results to logfile
     results['use_averages'] = use_averages
-    pipeline_line_break_with_spaces = '\n               '
     pipeline_line_break = '\n'
     output_string_to_log = (
         f"Model Saved to: {model_file_name}\n"
         f"\tQuery: {query}\n"
         f"\tUse Averages: {use_averages}\n"
+        f"\tTrained With: {trained_with}\n"
         "\tModel Information:\n"
-            f"\t\tPipeline: {str(results['pipeline']).replace(pipeline_line_break_with_spaces, '')}\n"
+            f"\t\tPipeline: {' '.join(str(results['pipeline']).replace(pipeline_line_break, '').split())}\n"
             f"\t\tParam Dictionary: {results['paramdict']}\n"
             f"\t\tbestparams: {results['bestparams']}\n"
-            f"\t\tbestestimator: {str(results['bestestimator']).replace(pipeline_line_break_with_spaces, '')}\n"
+            f"\t\tbestestimator: {' '.join(str(results['bestestimator']).replace(pipeline_line_break, '').split())}\n"
         "\tTraining:\n"
             f"\t\tprecision: {results['Training Validation']['precision']}\n"
             f"\t\trecall: {results['Training Validation']['recall']}\n"
@@ -488,11 +491,12 @@ def output_results(results:dict, model_file_name: str, use_averages: bool, query
             datetime.datetime.now().isoformat(),
             model_file_name,
             query,
+            trained_with,
             use_averages,
-            str(results['pipeline']).replace(pipeline_line_break_with_spaces, ''),
+            ' '.join(str(results['pipeline']).replace(pipeline_line_break, '').split()),
             results['paramdict'],
             results['bestparams'],
-            str(results['bestestimator']).replace(pipeline_line_break_with_spaces, ''),
+            ' '.join(str(results['bestestimator']).replace(pipeline_line_break, '').split()),
             results['Training Validation']['precision'],
             results['Training Validation']['recall'],
             results['Training Validation']['accuracy'],
@@ -534,47 +538,47 @@ def main():
     # )
 
     ##### All Datasets #####
-    query = (
-        "SELECT "
-        "schst.Result, "
-        # "schst.`Team 1 Streak` AS SCHOOL_TEAM_1 Streak, "
-        # "schst.`Team 2 Streak` AS SCHOOL_TEAM_2_Streak, "
-        f"{','.join(['school_stats1.`' + x + '` AS `SCHOOL_TEAM_1_' + x + '`' for x in SCHOOL_SEASON_STATS])}, "
-        f"{','.join(['school_stats2.`' + x + '` AS `SCHOOL_TEAM_2_' + x + '`'for x in SCHOOL_SEASON_STATS])}, "
-        f"{','.join(['opponent_stats1.`' + x + '` AS `OPPONENT_TEAM_1_' + x + '`' for x in OPPONENT_SEASON_STATS])}, "
-        f"{','.join(['opponent_stats2.`' + x + '` AS `OPPONENT_TEAM_2_' + x + '`'for x in OPPONENT_SEASON_STATS])}, "
-        f"{','.join(['kenpom_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in KENPOM_STATS])}, "
-        f"{','.join(['kenpom_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in KENPOM_STATS])}, "
-        f"{','.join(['ratings_team1.`' + x + '` AS `SCHOOL_TEAM_1_' + x + '`' for x in RATINGS_SR_STATS])}, "
-        f"{','.join(['ratings_team2.`' + x + '` AS `SCHOOL_TEAM_2_' + x + '`'for x in RATINGS_SR_STATS])} "
-        "FROM schedule_stats schst "
-        "INNER JOIN school_season_stats school_stats1 ON schst.`Team 1` = school_stats1.School AND schst.Year = school_stats1.Year "
-        "INNER JOIN school_season_stats school_stats2 ON schst.`Team 2` = school_stats2.School AND schst.Year = school_stats2.Year "
-        "INNER JOIN opponent_season_stats opponent_stats1 ON schst.`Team 1` = opponent_stats1.School AND schst.Year = opponent_stats1.Year "
-        "INNER JOIN opponent_season_stats opponent_stats2 ON schst.`Team 2` = opponent_stats2.School AND schst.Year = opponent_stats2.Year "
-        "INNER JOIN team_mapping team_map1 ON schst.`Team 1` = team_map1.`Sports Reference` "
-        "INNER JOIN team_mapping team_map2 ON schst.`Team 2` = team_map2.`Sports Reference` "
-        "INNER JOIN kenpom_stats kenpom_team1 ON kenpom_team1.Team = team_map1.Kenpom AND schst.Year = kenpom_team1.Year "
-        "INNER JOIN kenpom_stats kenpom_team2 ON kenpom_team2.Team = team_map2.Kenpom AND schst.Year = kenpom_team2.Year "
-        "INNER JOIN ratings_sr ratings_team1 ON schst.`Team 1` = ratings_team1.School AND schst.Year = ratings_team1.Year "
-        "INNER JOIN ratings_sr ratings_team2 ON schst.`Team 2` = ratings_team2.School AND schst.Year = ratings_team2.Year "
-        "WHERE Type = '{}' AND schst.Year >= 2010 "
-    )
-
-    ##### KenPom Data #####
     # query = (
     #     "SELECT "
     #     "schst.Result, "
-    #     # "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
-    #     f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in KENPOM_STATS])}, "
-    #     f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in KENPOM_STATS])} "
+    #     # "schst.`Team 1 Streak` AS SCHOOL_TEAM_1 Streak, "
+    #     # "schst.`Team 2 Streak` AS SCHOOL_TEAM_2_Streak, "
+    #     f"{','.join(['school_stats1.`' + x + '` AS `SCHOOL_TEAM_1_' + x + '`' for x in SCHOOL_SEASON_STATS])}, "
+    #     f"{','.join(['school_stats2.`' + x + '` AS `SCHOOL_TEAM_2_' + x + '`'for x in SCHOOL_SEASON_STATS])}, "
+    #     f"{','.join(['opponent_stats1.`' + x + '` AS `OPPONENT_TEAM_1_' + x + '`' for x in OPPONENT_SEASON_STATS])}, "
+    #     f"{','.join(['opponent_stats2.`' + x + '` AS `OPPONENT_TEAM_2_' + x + '`'for x in OPPONENT_SEASON_STATS])}, "
+    #     f"{','.join(['kenpom_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in KENPOM_STATS])}, "
+    #     f"{','.join(['kenpom_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in KENPOM_STATS])}, "
+    #     f"{','.join(['ratings_team1.`' + x + '` AS `SCHOOL_TEAM_1_' + x + '`' for x in RATINGS_SR_STATS])}, "
+    #     f"{','.join(['ratings_team2.`' + x + '` AS `SCHOOL_TEAM_2_' + x + '`'for x in RATINGS_SR_STATS])} "
     #     "FROM schedule_stats schst "
+    #     "INNER JOIN school_season_stats school_stats1 ON schst.`Team 1` = school_stats1.School AND schst.Year = school_stats1.Year "
+    #     "INNER JOIN school_season_stats school_stats2 ON schst.`Team 2` = school_stats2.School AND schst.Year = school_stats2.Year "
+    #     "INNER JOIN opponent_season_stats opponent_stats1 ON schst.`Team 1` = opponent_stats1.School AND schst.Year = opponent_stats1.Year "
+    #     "INNER JOIN opponent_season_stats opponent_stats2 ON schst.`Team 2` = opponent_stats2.School AND schst.Year = opponent_stats2.Year "
     #     "INNER JOIN team_mapping team_map1 ON schst.`Team 1` = team_map1.`Sports Reference` "
     #     "INNER JOIN team_mapping team_map2 ON schst.`Team 2` = team_map2.`Sports Reference` "
-    #     "INNER JOIN kenpom_stats seast_team1 ON seast_team1.Team = team_map1.Kenpom AND schst.Year = seast_team1.Year "
-    #     "INNER JOIN kenpom_stats seast_team2 ON seast_team2.Team = team_map2.Kenpom AND schst.Year = seast_team2.Year "
-    #     "WHERE Type = '{}'"
+    #     "INNER JOIN kenpom_stats kenpom_team1 ON kenpom_team1.Team = team_map1.Kenpom AND schst.Year = kenpom_team1.Year "
+    #     "INNER JOIN kenpom_stats kenpom_team2 ON kenpom_team2.Team = team_map2.Kenpom AND schst.Year = kenpom_team2.Year "
+    #     "INNER JOIN ratings_sr ratings_team1 ON schst.`Team 1` = ratings_team1.School AND schst.Year = ratings_team1.Year "
+    #     "INNER JOIN ratings_sr ratings_team2 ON schst.`Team 2` = ratings_team2.School AND schst.Year = ratings_team2.Year "
+    #     "WHERE Type = '{}' AND schst.Year >= 2010 "
     # )
+
+    #### KenPom Data #####
+    query = (
+        "SELECT "
+        "schst.Result, "
+        # "schst.`Team 1 Streak`,  schst.`Team 2 Streak`, "
+        f"{','.join(['seast_team1.`' + x + '` AS `TEAM_1_' + x + '`' for x in KENPOM_STATS])}, "
+        f"{','.join(['seast_team2.`' + x + '` AS `TEAM_2_' + x + '`'for x in KENPOM_STATS])} "
+        "FROM schedule_stats schst "
+        "INNER JOIN team_mapping team_map1 ON schst.`Team 1` = team_map1.`Sports Reference` "
+        "INNER JOIN team_mapping team_map2 ON schst.`Team 2` = team_map2.`Sports Reference` "
+        "INNER JOIN kenpom_stats seast_team1 ON seast_team1.Team = team_map1.Kenpom AND schst.Year = seast_team1.Year "
+        "INNER JOIN kenpom_stats seast_team2 ON seast_team2.Team = team_map2.Kenpom AND schst.Year = seast_team2.Year "
+        "WHERE Type = '{}'"
+    )
 
     ##### Sports Reference Ratings #####
     # query = (
@@ -593,9 +597,10 @@ def main():
     system.createFolder('./models/')
     model_file_name = 'models/' + datetime.datetime.now().strftime('%Y%m%d %H%M%S') + '_model.skops'
     use_averages = True
+    trained_with = 'NCAA'
 
     # Get Data
-    df = get_data(query.format('REG'), use_averages)
+    df = get_data(query.format(trained_with), use_averages)
     df = clean_data(df)
 
     # Train Model
@@ -607,7 +612,7 @@ def main():
     # Predict NCAA games for another step of validation
     results['NCAA'] = compare_model_against_ncaa(query.format('NCAA'), model, use_averages)
 
-    output_results(results, model_file_name, use_averages, query)
+    output_results(results, model_file_name, use_averages, query, trained_with)
 
 
 if __name__ == "__main__":
