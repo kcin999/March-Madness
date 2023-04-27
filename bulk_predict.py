@@ -58,7 +58,7 @@ def make_prediction(team1: str, team2: str) -> str:
     :type team1: str
     :param team2: Team 2 in the game
     :type team2: str
-    :raises Exception: Thrown if team cannot be found in dataframe
+    :raises ValueError: Thrown if team cannot be found in dataframe
     :return: Team that won the match
     :rtype: str
     """
@@ -88,7 +88,7 @@ def make_prediction(team1: str, team2: str) -> str:
 
     df = get_data(query,True)
     df = clean_data(df)
-    
+
     if not df.empty:
         predictions = MODEL.predict(df)[0]
 
@@ -99,7 +99,7 @@ def make_prediction(team1: str, team2: str) -> str:
             print(f"{team2} is predicited to beat to {team1}")
             return team2
     else:
-        raise Exception(f"ERROR: Could not find one of {team1} or {team2}")
+        raise ValueError(f"ERROR: Could not find one of {team1} or {team2}")
 
 def predict_region(region: str, round_of_64: list[str]) -> str:
     """Loops for predicting an entire region
@@ -111,7 +111,7 @@ def predict_region(region: str, round_of_64: list[str]) -> str:
     :return: winner of the region
     :rtype: str
     """
-    
+
     round_of_32 = []
     sweet_sixteen = []
     elite_eight = []
@@ -131,7 +131,8 @@ def predict_region(region: str, round_of_64: list[str]) -> str:
     print(f"\n{region}: Elite Eight")
     for i in range(0, len(elite_eight),2):
         return make_prediction(elite_eight[i], elite_eight[i+1])
-    
+
+
 def predict_finals(final_four: list[str]) -> str:
     """Predicts the finals.
 
@@ -142,14 +143,14 @@ def predict_finals(final_four: list[str]) -> str:
     """
     finals = []
 
-    print(f"Final Four")
+    print("Final Four")
     for i in range(0, len(final_four), 2):
         finals.append(make_prediction(final_four[i], final_four[i+1]))
 
     print("\nFinals")
     for i in range(0, len(finals), 2):
-        return (make_prediction(finals[i], finals[i+1]))
-    
+        return make_prediction(finals[i], finals[i+1])
+
 def main():
     """Main Function"""
     final_four = [
