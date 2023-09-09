@@ -1,5 +1,6 @@
 """Scrapes Sports Reference and KenPom for NCAA statistical data"""
 import os
+import configparser
 import logging
 import time
 import sqlite3
@@ -14,39 +15,9 @@ logging.basicConfig(
     level=logging.DEBUG
 )
 
-##### URLS #####
-SCHOOL_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-school-stats.html"
-SCHOOL_ADVANCED_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-advanced-school-stats.html"
-OPPONENT_SCHOOL_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-opponent-stats.html"
-OPPONENT_ADVANCED_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-advanced-opponent-stats.html"
-SPORTS_REFERENCE_RATINGS_URL = "https://www.sports-reference.com/cbb/seasons/men/{}-ratings.html"
-SCHEDULE_URL = "https://www.sports-reference.com/cbb/schools/{}/men/{}-schedule.html"
-KENPOM_URL = "https://kenpom.com/index.php?y={}"
+config = configparser.ConfigParser()
+config.read('config.ini')
 
-##### Folders #####
-SCHEDULE_FOLDER = "./Stats/Schedules/{}"
-SEASONS_FOLDER = "./Stats/Seasons"
-
-##### Files #####
-TEAM_SCHEDULE_FILE = './Stats/Schedules/{}/{}_schedule.csv'
-YEAR_SCHEDULE_FILE = "./Stats/Schedules/{}_schedule.csv"
-SCHOOL_BASIC_SEASON_STATS_FILE = './Stats/Seasons/{}_school_season_stats.csv'
-SCHOOL_ADV_SEASON_STATS_FILE = './Stats/Seasons/{}_school_advanced_season_stats.csv'
-OPPONENT_BASIC_SEASON_STATS_FILE = './Stats/Seasons/{}_opponent_season_stats.csv'
-OPPONENT_ADV_SEASON_STATS_FILE = './Stats/Seasons/{}_opponent_advanced_season_stats.csv'
-SPORTS_REFERENCE_RATINGS_FILE = './Stats/Seasons/{}_ratings.csv'
-KENPOM_FILE = './Stats/Seasons/{}_kenpom.csv'
-DATABASE_FILE = 'Stats/stats.sqlite'
-
-## Years to get data for
-MIN_YEAR = 2002
-MAX_YEAR = 2023
-
-# Opponent Data only goes back to 2010
-MIN_OPPONENT_STATS_YEAR = 2010
-
-# Kenpom only goes back to 2002
-MIN_KENPOM_YEAR = 2002
 
 
 SPORTS_REFERENCE_TEAM_NAMES = {
@@ -78,6 +49,92 @@ SPORTS_REFERENCE_TEAM_NAMES = {
 }
 
 
+def main():
+    """Main Function"""
+    system.createFolder(config.get('FOLDERS', 'SEASONS_FOLDER'))
+    user_answer = input("Would you like to download sports reference data? (y/n) ")
+    if user_answer.upper() in ["Y"]:
+        for year in range(config.get('YEARS', 'GAMELOG_STATS_YEAR'), config.get('YEARS', 'MAX_YEAR') + 1):
+            # School Base Data
+            print(f"Getting School Base Data {year}")
+            season_data_df = get_season_data_from_sports_reference(year, 'school')
+            season_data_df.to_csv(config.get('FILE', 'SCHOOL_BASIC_SEASON_STATS_FILE').format(year), index=False)
+            time.sleep(config.get('OTHER', 'SPORTS_REFERENCE_SLEEP_TIME'))
+
+            # School Advanced Data
+            print(f"Getting School Advanced Data {year}")
+            df = get_advanced_season_data_from_sports_reference(year, 'school')
+            df.to_csv(config.get('FILE', 'SCHOOL_ADV_SEASON_STATS_FILE').format(year), index=False)
+            time.sleep(config.get('OTHER', 'SPORTS_REFERENCE_SLEEP_TIME'))
+
+            if year >= config.get('YEARS', 'MIN_OPPONENT_STATS_YEAR'):
+                # Opponent Base Data
+                print(f"Getting Opponent Base Data {year}")
+                df = get_season_data_from_sports_reference(year, 'opponent')
+                df.to_csv(config.get('FILE', 'OPPONENT_BASIC_SEASON_STATS_FILE').format(year), index=False)
+                time.sleep(config.get('OTHER', 'SPORTS_REFERENCE_SLEEP_TIME'))
+
+                # Opponent Advanced Data
+                print(f"Getting Opponent Advanced Data {year}")
+                df = get_advanced_season_data_from_sports_reference(year, 'opponent')
+                df.to_csv(config.get('FILE', 'OPPONENT_ADV_SEASON_STATS_FILE').format(year), index=False)
+                time.sleep(config.get('OTHER', 'SPORTS_REFERENCE_SLEEP_TIME'))
+
+            # Rating Data
+            print(f"Getting Rating Data {year}")
+            df = get_ratings_from_sports_reference(year)
+            df.to_csv(config.get('FILE', 'SPORTS_REFERENCE_RATINGS_FILE').format(year), index=False)
+            time.sleep(config.get('OTHER', 'SPORTS_REFERENCE_SLEEP_TIME'))
+
+            # Team Specific Data
+            system.createFolder(config.get('FOLDERS', 'SCHEDULE_FOLDER').format(year))
+            schedule_df = pd.DataFrame()
+            gamelog_df = pd.DataFrame()
+            for team in season_data_df['School'].to_list():
+                print(f"Getting Schedule Data {team}, {year}")
+                df = get_schedule_data_from_sports_reference(year, team)
+                schedule_df = pd.concat([schedule_df, df])
+
+                time.sleep(config.get('OTHER', 'SPORTS_REFERENCE_SLEEP_TIME'))
+
+                if year >= config.get('YEARS', 'GAMELOG_STATS_YEAR'):
+                    print(f"Getting Gamelog Data {team}, {year}")
+                    df = get_game_logs_from_sports_reference(year, team)
+                    gamelog_df = pd.concat([gamelog_df, df])
+                    time.sleep(config.get('OTHER', 'SPORTS_REFERENCE_SLEEP_TIME'))
+
+            schedule_df.to_csv(config.get('FILE', 'YEAR_SCHEDULE_FILE').format(year), index=False)
+
+            if year >= config.get('YEARS', 'GAMELOG_STATS_YEAR'):
+                gamelog_df.to_csv(config.get('FILES', 'YEAR_GAME_LOG_FILE').format(year), index=False)
+
+
+    user_answer = input("Would you like to get ranking data from KenPom? (y/n) ")
+    if user_answer.upper() in ["Y"]:
+        for year in range(max(config.get('YEARS', 'MIN_KENPOM_YEAR'), config.get('YEARS', 'MIN_YEAR')), config.get('YEARS', 'MAX_YEAR') + 1):
+            system.createFolder(config.get('FOLDERS', 'SCHEDULE_FOLDER').format(year))
+            df = get_kenpom_data(year)
+            df.to_csv(config.get('FILES', 'KENPOM_FILE').format(year), index=False)
+            time.sleep(60/19)
+
+
+    user_answer = input("Would you like to add from the CSVs into a sqlite database? (y/n) ")
+    if user_answer.upper() in ["Y"]:
+        # SQLITE connection
+        con = sqlite3.connect(config.get('FILES', 'DATABASE_FILE'))
+        try:
+            for year in range(config.get('YEARS', 'MIN_YEAR'), config.get('YEARS', 'MAX_YEAR') + 1):
+                add_data_to_db(year, con)
+
+            # Team Mapping
+            team_mapping_df = pd.read_csv('team_mapping.csv')
+            team_mapping_df.to_sql('team_mapping', con, if_exists='append', index=False)
+        except FileNotFoundError as exc:
+            raise FileNotFoundError("All modes must have run in order to build a correct sqlite file.") from exc
+
+    print("Program has finished")
+
+
 def get_team_list(year: int) -> pd.Series:
     """Gets the list of teams from the season.csv
 
@@ -102,10 +159,10 @@ def get_season_data_from_sports_reference(year: int, page: str) -> pd.DataFrame:
     :rtype: pd.DataFrame
     """
     if page.upper() == 'SCHOOL':
-        url = SCHOOL_STATS_URL
+        url = config.get('URLS', 'SCHOOL_STATS_URL')
         table_id = 'basic_school_stats'
     elif page.upper() == 'OPPONENT':
-        url = OPPONENT_SCHOOL_STATS_URL
+        url = config.get('URLS', 'OPPONENT_SCHOOL_STATS_URL')
         table_id = 'basic_opp_stats'
     else:
         raise ValueError(f"Page Parameter, '{page}', is not known")
@@ -165,10 +222,10 @@ def get_advanced_season_data_from_sports_reference(year: int, page: str) -> pd.D
     :rtype: pd.DataFrame
     """
     if page.upper() == 'SCHOOL':
-        url = SCHOOL_ADVANCED_STATS_URL
+        url = config.get('URLS', 'SCHOOL_ADVANCED_STATS_URL')
         table_id = 'adv_school_stats'
     elif page.upper() == 'OPPONENT':
-        url = OPPONENT_ADVANCED_STATS_URL
+        url = config.get('URLS', 'OPPONENT_ADVANCED_STATS_URL')
         table_id = 'adv_opp_stats'
     else:
         raise ValueError(f"Page Parameter, '{page}', is not known")
@@ -224,7 +281,7 @@ def get_ratings_from_sports_reference(year: int):
     :rtype: pd.Dataframe
     """
     # Gets Data
-    response = requests.get(SPORTS_REFERENCE_RATINGS_URL.format(year), timeout=None)
+    response = requests.get(config.get('URLS', 'SPORTS_REFERENCE_RATINGS_URL').format(year), timeout=None)
 
     # Makes sure that there is no error
     response.raise_for_status()
@@ -264,149 +321,218 @@ def get_ratings_from_sports_reference(year: int):
     return df
 
 
-def get_schedule_data_from_sports_reference(year: int) -> pd.DataFrame:
+def format_team_name(team: str) -> str:
+    """Formats the team name to match what would be in sports-reference
+
+    :param team: Team String
+    :type team: str
+    :return: Formatted Team Name for Sports-Reference URL
+    :rtype: str
+    """
+    # Format team name
+    team_name = team.replace(' ', '-').lower()
+    team_name = team_name.replace('&', '')
+    team_name = team_name.replace('(', '')
+    team_name = team_name.replace(')', '')
+    team_name = team_name.replace("'", '')
+    team_name = team_name.replace('.', '')
+
+    # Error for Teams appearing as different names
+    if team_name in SPORTS_REFERENCE_TEAM_NAMES:
+        team_name = SPORTS_REFERENCE_TEAM_NAMES[team_name]
+
+    return team_name
+
+
+def get_schedule_data_from_sports_reference(year: int, team: str) -> pd.DataFrame:
     """Gets the schedule information from sports reference
 
     :param year: Year to get the data for
     :type year: int
+    :param team: Team to get the data for
+    :type team: str
 
     :return:  DataFrame of Stats formatted for use
     :rtype: pd.DataFrame
     """
-    team_list = get_team_list(year)
+    team_df = pd.DataFrame()
+    if os.path.exists(config.get('FILES', 'TEAM_SCHEDULE_FILE').format(year, team)):
+        return team_df
 
-    df = pd.DataFrame()
-    for i, team in enumerate(team_list):
+    team_name = format_team_name(team)
+    # Gets Data
+    response = requests.get(
+        config.get('URLS', 'SCHEDULE_URL').format(team_name, year),
+        timeout=None
+    )
 
-        if os.path.exists(TEAM_SCHEDULE_FILE.format(year, team)):
-            continue
-
-        # Sports reference has a rate limiter on it.
-        # The rate no more than 20 calls per minute. So I am putting a sleep on it, to call only 19 times in a minute
-        time.sleep(60/19)
-
-        # Format team name
-        team_name = team.replace(' ', '-').lower()
-        team_name = team_name.replace('&', '')
-        team_name = team_name.replace('(', '')
-        team_name = team_name.replace(')', '')
-        team_name = team_name.replace("'", '')
-        team_name = team_name.replace('.', '')
-
-        # Error for houston-christian appearing as houston-baptist on sports reference
-        if team_name in SPORTS_REFERENCE_TEAM_NAMES:
-            team_name = SPORTS_REFERENCE_TEAM_NAMES[team_name]
-
-        # Prints where we are at in the sequence
-        print(f"Grabbing Data for {team} in {year} ({i}/{len(team_list)})")
-
-        # Gets Data
-        response = requests.get(
-            SCHEDULE_URL.format(team_name, year),
-            timeout=None
+    if response.status_code == 404:
+        logging.warning(
+            "Could not find address (%s) for %s",
+            config.get('URLS', 'SCHEDULE_URL').format(team_name, year),
+            team
+        )
+        return team_df
+    elif response.status_code != 200:
+        logging.warning(
+            "Status Code: %s return for URL: %s",
+            response.status_code, config.get('URLS', 'SCHEDULE_URL').format(team_name, year)
         )
 
-        if response.status_code == 404:
-            logging.warning(
-                "Could not find address (%s) for %s",
-                SCHEDULE_URL.format(team_name, year),
-                team
-            )
-            continue
-        elif response.status_code != 200:
-            logging.warning(
-                "Status Code: %s return for URL: %s",
-                response.status_code, SCHEDULE_URL.format(team_name, year)
-            )
-
-        # Reads Data into DataFrame
-        try:
-            team_df = pd.read_html(
-                response.text,
-                attrs={
-                    'id': 'schedule'
-                }
-            )[0]
-        except ImportError:
-            logging.warning(
-                "Error for %s. URL: %s",
-                team,
-                SCHEDULE_URL.format(team_name, year)
-            )
-            continue
-
-        team_df['Team 1'] = team
-
-
-        # Renames Columns
-        team_df = team_df.rename(columns={
-            'Opponent': 'Team 2',
-            'Tm': 'Team 1 Score',
-            'Opp': 'Team 2 Score'
-        })
-
-        # Clean Team Names
-        team_df['Team 1'] = team_df['Team 1'].str.replace(
-            r' \(\d*\)',
-            '',
-            regex=True
+    # Reads Data into DataFrame
+    try:
+        team_df = pd.read_html(
+            response.text,
+            attrs={
+                'id': 'schedule'
+            }
+        )[0]
+    except ImportError:
+        logging.warning(
+            "Error for %s. URL: %s",
+            team,
+            config.get('URLS', 'SCHEDULE_URL').format(team_name, year)
         )
-        team_df['Team 2'] = team_df['Team 2'].str.replace(
-            r' \(\d*\)',
-            '',
-            regex=True
-        )
+        return team_df
 
-        # Drops row that contains header information
-        team_df = team_df[(team_df['Streak'] != 'Streak')]
-
-        # Changes Streak to numerics
-        team_df['Streak'] = team_df['Streak'].str.replace('W ', '')
-        team_df['Streak'] = team_df['Streak'].str.replace('L ', '-')
-        team_df['Streak'] = pd.to_numeric(team_df['Streak'])
-        team_df['Streak'] = pd.to_numeric(team_df['Streak'])
-
-        # Results
-        # True -> Team 1 won the game
-        # False -> Team 2 won the game
-        team_df['Result'] = team_df['Team 1 Score'] > team_df['Team 2 Score']
-
-        team_df.to_csv(TEAM_SCHEDULE_FILE.format(year, team), index=False)
-
-        df = pd.concat([df, team_df])
-
-    return df
+    team_df['Team 1'] = team
 
 
-def combine_schedules(year: int):
-    """Combines the individual team schedules into one large CSV file.
+    # Renames Columns
+    team_df = team_df.rename(columns={
+        'Opponent': 'Team 2',
+        'Tm': 'Team 1 Score',
+        'Opp': 'Team 2 Score'
+    })
 
-    :param year: Year to combine schedules
+    # Clean Team Names
+    team_df['Team 1'] = team_df['Team 1'].str.replace(
+        r' \(\d*\)',
+        '',
+        regex=True
+    )
+    team_df['Team 2'] = team_df['Team 2'].str.replace(
+        r' \(\d*\)',
+        '',
+        regex=True
+    )
+
+    # Drops row that contains header information
+    team_df = team_df[(team_df['Streak'] != 'Streak')]
+
+    # Changes Streak to numerics
+    team_df['Streak'] = team_df['Streak'].str.replace('W ', '')
+    team_df['Streak'] = team_df['Streak'].str.replace('L ', '-')
+    team_df['Streak'] = pd.to_numeric(team_df['Streak'])
+    team_df['Streak'] = pd.to_numeric(team_df['Streak'])
+
+    # Results
+    # True -> Team 1 won the game
+    # False -> Team 2 won the game
+    team_df['Result'] = team_df['Team 1 Score'] > team_df['Team 2 Score']
+
+    team_df.to_csv(config.get('FILES', 'TEAM_SCHEDULE_FILE').format(year, team), index=False)
+
+    return team_df
+
+
+def get_game_logs_from_sports_reference(year: int, team: str) -> pd.DataFrame:
+    """Gets the game log information from sports reference
+
+    :param year: Year to get the data for
     :type year: int
+    :param team: Team to get the data for
+    :type team: str
+
+    :return:  DataFrame of Stats formatted for use
+    :rtype: pd.DataFrame
     """
-    df = pd.DataFrame()
-    for file in os.listdir(SCHEDULE_FOLDER.format(year)):
-        team_df = pd.read_csv(SCHEDULE_FOLDER.format(year) + "/" + file)
-        team_df['Date'] = pd.to_datetime(team_df['Date'])
+    team_df = pd.DataFrame()
 
-        team_df = team_df[[
-            'Date',
-            'Team 1',
-            'Team 2',
-            'SRS',
-            'Type',
-            'Team 1 Score',
-            'Team 2 Score',
-            'Streak',
-            'Result'
-        ]]
-        # Shifts Streaks to be able to have the win streak coming into the game
-        team_df['Streak'] = team_df['Streak'].shift(1)
-        team_df['Streak'] = team_df['Streak'].fillna(0)
+    if os.path.exists(config.get('FILES', 'TEAM_GAME_LOG_FILE').format(year, team)):
+        return team_df
 
-        df = pd.concat([df, team_df], ignore_index=True)
+    team_name = format_team_name(team)
 
-    df.to_csv(YEAR_SCHEDULE_FILE.format(year), index=False)
+    # Gets Data
+    response = requests.get(
+        config.get('URLS', 'SCHOOL_GAME_LOG_URL').format(team_name, year),
+        timeout=None
+    )
+
+    if response.status_code == 404:
+        logging.warning(
+            "Could not find address (%s) for %s",
+            config.get('URLS', 'SCHOOL_GAME_LOG_URL').format(team_name, year),
+            team
+        )
+        return team_df
+    elif response.status_code != 200:
+        logging.warning(
+            "Status Code: %s return for URL: %s",
+            response.status_code, config.get('URLS', 'SCHOOL_GAME_LOG_URL').format(team_name, year)
+        )
+
+    # Reads Data into DataFrame
+    try:
+        team_df = pd.read_html(
+            response.text,
+            attrs={
+                'id': 'sgl-basic_NCAAM'
+            }
+        )[0]
+    except ImportError:
+        logging.warning(
+            "Error for %s. URL: %s",
+            team,
+            config.get('URLS', 'SCHOOL_GAME_LOG_URL').format(team_name, year)
+        )
+        return team_df
+
+    # Combines Columns into One Level
+    team_df.columns = team_df.columns.map(' '.join).str.strip('|')
+
+    # Renames Columns using regex
+    team_df.columns = team_df.columns.str.replace(
+        r'Unnamed: \d_level_\d ',
+        '',
+        regex=True
+    )
+
+    # Drop columns that have all blanks
+    team_df = team_df.dropna(axis=1, how='all')
+
+    # Removes rows that are in the middle of the table
+    team_df = team_df[(team_df.G != 'G') & (pd.notna(team_df.G))]
+
+    team_df['Team 1'] = team
+
+
+    # Renames Columns
+    team_df.columns = ['G','Date','Type', 'Team 2', 'W/L', 'Team 1 Score', 'Team 2 Score'] + team_df.columns.to_list()[7:]
+
+
+    # Clean Team Names
+    team_df['Team 1'] = team_df['Team 1'].str.replace(
+        r' \(\d*\)',
+        '',
+        regex=True
+    )
+    team_df['Team 2'] = team_df['Team 2'].str.replace(
+        r' \(\d*\)',
+        '',
+        regex=True
+    )
+
+    # Results
+    # True -> Team 1 won the game
+    # False -> Team 2 won the game
+    team_df['Result'] = team_df['Team 1 Score'] > team_df['Team 2 Score']
+
+    team_df.to_csv(config.get('FILES', 'TEAM_GAME_LOG_FILE').format(year, team), index=False)
+
+
+    return team_df
 
 
 def remove_duplicate_games(year: int):
@@ -415,7 +541,7 @@ def remove_duplicate_games(year: int):
     :param year: _description_
     :type year: int
     """
-    df = pd.read_csv(YEAR_SCHEDULE_FILE.format(year))
+    df = pd.read_csv(config.get('FILE', 'YEAR_SCHEDULE_FILE').format(year))
 
 
     df = df.merge(
@@ -435,7 +561,7 @@ def remove_duplicate_games(year: int):
     # Idea from here
     # https://stackoverflow.com/questions/51182228/python-delete-duplicates-in-a-dataframe-based-on-two-columns-combinations
     df = df[~df[['Date', 'Team 1', 'Team 2']].apply(frozenset, axis=1).duplicated()]
-    df.to_csv(YEAR_SCHEDULE_FILE.format(year), index=False)
+    df.to_csv(config.get('FILE', 'YEAR_SCHEDULE_FILE').format(year), index=False)
 
 
 def get_kenpom_data(year: int) -> pd.DataFrame:
@@ -447,7 +573,7 @@ def get_kenpom_data(year: int) -> pd.DataFrame:
     # Gets Data
     # Set Custom Headers to be able to work
     headers = {'User-Agent': 'PostmanRuntime/7.29.2'}
-    response = requests.get(KENPOM_URL.format(year), timeout=None, headers = headers)
+    response = requests.get(config.get('URLS', 'KENPOM_URL').format(year), timeout=None, headers = headers)
 
     # Makes sure that there is no error
     response.raise_for_status()
@@ -501,8 +627,8 @@ def add_data_to_db(year: int, con: sqlite3.Connection):
     :param con: _description_
     :type con: sqlite3.Connection
     """
-    school_basic_stats_df = pd.read_csv(SCHOOL_BASIC_SEASON_STATS_FILE.format(year))
-    school_advanced_stats_df = pd.read_csv(SCHOOL_ADV_SEASON_STATS_FILE.format(year))
+    school_basic_stats_df = pd.read_csv(config.get('FILE', 'SCHOOL_BASIC_SEASON_STATS_FILE').format(year))
+    school_advanced_stats_df = pd.read_csv(config.get('FILE', 'SCHOOL_ADV_SEASON_STATS_FILE').format(year))
 
     # Remove Duplicate Information
     school_advanced_stats_df = school_advanced_stats_df.drop(columns=[
@@ -526,23 +652,23 @@ def add_data_to_db(year: int, con: sqlite3.Connection):
     school_stats_df['Year'] = year
     school_stats_df.to_sql('school_season_stats', con, if_exists='append', index=False)
 
-    schedule_df = pd.read_csv(YEAR_SCHEDULE_FILE.format(year))
+    schedule_df = pd.read_csv(config.get('FILE', 'YEAR_SCHEDULE_FILE').format(year))
     schedule_df['Year'] = year
     schedule_df.to_sql('schedule_stats', con, if_exists='append', index=False)
 
-    school_ratings_df = pd.read_csv(SPORTS_REFERENCE_RATINGS_FILE.format(year))
+    school_ratings_df = pd.read_csv(config.get('FILE', 'SPORTS_REFERENCE_RATINGS_FILE').format(year))
     school_ratings_df['Year'] = year
     school_ratings_df.to_sql('ratings_sr', con, if_exists='append')
 
-    if year >= MIN_KENPOM_YEAR:
-        kenpom_df = pd.read_csv(KENPOM_FILE.format(year))
+    if year >= config.get('YEARS', 'MIN_KENPOM_YEAR'):
+        kenpom_df = pd.read_csv(config.get('FILES', 'KENPOM_FILE').format(year))
         kenpom_df['Year'] = year
         kenpom_df.to_sql('kenpom_stats', con, if_exists='append', index=False)
 
 
-    if year >= MIN_OPPONENT_STATS_YEAR:
-        opponent_basic_stats_df = pd.read_csv(OPPONENT_BASIC_SEASON_STATS_FILE.format(year))
-        opponent_advanced_stats_df = pd.read_csv(OPPONENT_ADV_SEASON_STATS_FILE.format(year))
+    if year >= config.get('YEARS', 'MIN_OPPONENT_STATS_YEAR'):
+        opponent_basic_stats_df = pd.read_csv(config.get('FILE', 'OPPONENT_BASIC_SEASON_STATS_FILE').format(year))
+        opponent_advanced_stats_df = pd.read_csv(config.get('FILE', 'OPPONENT_ADV_SEASON_STATS_FILE').format(year))
 
         # Remove Duplicate Information
         opponent_advanced_stats_df = opponent_advanced_stats_df.drop(columns=[
@@ -565,92 +691,6 @@ def add_data_to_db(year: int, con: sqlite3.Connection):
         opponent_stats_df = pd.merge(opponent_basic_stats_df, opponent_advanced_stats_df, how='outer', on='School')
         opponent_stats_df['Year'] = year
         opponent_stats_df.to_sql('opponent_season_stats', con, if_exists='append', index=False)
-
-
-def main():
-    """Main Function"""
-    system.createFolder(SEASONS_FOLDER)
-    user_answer = input("Would you like to download school season statistics for sports reference? (y/n) ")
-    if user_answer.upper() in ["Y"]:
-        for year in range(MIN_YEAR, MAX_YEAR + 1):
-            df = get_season_data_from_sports_reference(year, 'school')
-            df.to_csv(SCHOOL_BASIC_SEASON_STATS_FILE.format(year), index=False)
-            # Sports reference has a rate limiter on it.
-            # The rate no more than 20 calls per minute. So I am putting a sleep on it, to call only 19 times in a minute
-            time.sleep(60/19)
-
-    user_answer = input("Would you like to download opponent season statistics for sports reference? (y/n) ")
-    if user_answer.upper() in ["Y"]:
-        for year in range(max(MIN_OPPONENT_STATS_YEAR, MIN_YEAR), MAX_YEAR + 1):
-            df = get_season_data_from_sports_reference(year, 'opponent')
-            df.to_csv(OPPONENT_BASIC_SEASON_STATS_FILE.format(year), index=False)
-            # Sports reference has a rate limiter on it.
-            # The rate no more than 20 calls per minute. So I am putting a sleep on it, to call only 19 times in a minute
-            time.sleep(60/19)
-
-    user_answer = input("Would you like to download school advanced season statistics from sports reference? (y/n) ")
-    if user_answer.upper() in ["Y"]:
-        for year in range(MIN_YEAR, MAX_YEAR + 1):
-            df = get_advanced_season_data_from_sports_reference(year, 'school')
-            df.to_csv(SCHOOL_ADV_SEASON_STATS_FILE.format(year), index=False)
-            # Sports reference has a rate limiter on it.
-            # The rate no more than 20 calls per minute. So I am putting a sleep on it, to call only 19 times in a minute
-            time.sleep(60/19)
-
-    user_answer = input("Would you like to download opponent advanced season statistics from sports reference? (y/n) ")
-    if user_answer.upper() in ["Y"]:
-        for year in range(max(MIN_OPPONENT_STATS_YEAR, MIN_YEAR), MAX_YEAR + 1):
-            df = get_advanced_season_data_from_sports_reference(year, 'opponent')
-            df.to_csv(OPPONENT_ADV_SEASON_STATS_FILE.format(year), index=False)
-            # Sports reference has a rate limiter on it.
-            # The rate no more than 20 calls per minute. So I am putting a sleep on it, to call only 19 times in a minute
-            time.sleep(60/19)
-
-    user_answer = input("Would you like to download rating information from sports reference? (y/n) ")
-    if user_answer.upper() in ["Y"]:
-        for year in range(max(MIN_YEAR, MIN_YEAR), MAX_YEAR + 1):
-            df = get_ratings_from_sports_reference(year)
-            df.to_csv(SPORTS_REFERENCE_RATINGS_FILE.format(year), index=False)
-            # Sports reference has a rate limiter on it.
-            # The rate no more than 20 calls per minute. So I am putting a sleep on it, to call only 19 times in a minute
-            time.sleep(60/19)
-
-    user_answer = input("Would you like to download schedule information for each team? (y/n) ")
-    if user_answer.upper() in ["Y"]:
-        for year in range(MIN_YEAR, MAX_YEAR + 1):
-            system.createFolder(SCHEDULE_FOLDER.format(year))
-            df = get_schedule_data_from_sports_reference(year)
-            df.to_csv(YEAR_SCHEDULE_FILE.format(year), index=False)
-
-    user_answer = input("Would you like to get ranking data from KenPom? (y/n) ")
-    if user_answer.upper() in ["Y"]:
-        for year in range(max(MIN_KENPOM_YEAR, MIN_YEAR), MAX_YEAR + 1):
-            system.createFolder(SCHEDULE_FOLDER.format(year))
-            df = get_kenpom_data(year)
-            df.to_csv(KENPOM_FILE.format(year), index=False)
-            time.sleep(60/19)
-
-    user_answer = input("Would you like to add from the combine individual schedule results into a larger single season record? (y/n) ")
-    if user_answer.upper() in ["Y"]:
-        for year in range(MIN_YEAR, MAX_YEAR + 1):
-            combine_schedules(year)
-            remove_duplicate_games(year)
-
-    user_answer = input("Would you like to add from the CSVs into a sqlite database? (y/n) ")
-    if user_answer.upper() in ["Y"]:
-        # SQLITE connection
-        con = sqlite3.connect(DATABASE_FILE)
-        try:
-            for year in range(MIN_YEAR, MAX_YEAR + 1):
-                add_data_to_db(year, con)
-
-            # Team Mapping
-            team_mapping_df = pd.read_csv('team_mapping.csv')
-            team_mapping_df.to_sql('team_mapping', con, if_exists='append', index=False)
-        except FileNotFoundError as exc:
-            raise FileNotFoundError("All modes must have run in order to build a correct sqlite file.") from exc
-
-    print("Program has finished")
 
 
 if __name__ == "__main__":
