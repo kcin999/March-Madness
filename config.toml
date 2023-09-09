@@ -1,12 +1,12 @@
 [URLS]
-SCHOOL_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{{}}-school-stats.html"
-SCHOOL_ADVANCED_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{{}}-advanced-school-stats.html"
-SCHOOL_GAME_LOG_URL = "https://www.sports-reference.com/cbb/schools/{{}}/men/{{}}-gamelogs.html"
-OPPONENT_SCHOOL_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{{}}-opponent-stats.html"
-OPPONENT_ADVANCED_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{{}}-advanced-opponent-stats.html"
-SPORTS_REFERENCE_RATINGS_URL = "https://www.sports-reference.com/cbb/seasons/men/{{}}-ratings.html"
-SCHEDULE_URL = "https://www.sports-reference.com/cbb/schools/{{}}/men/{{}}-schedule.html"
-KENPOM_URL = "https://kenpom.com/index.php?y={{}}"
+SCHOOL_STATS_URL = "https =//www.sports-reference.com/cbb/seasons/men/{{}}-school-stats.html"
+SCHOOL_ADVANCED_STATS_URL = "https =//www.sports-reference.com/cbb/seasons/men/{{}}-advanced-school-stats.html"
+SCHOOL_GAME_LOG_URL = "https =//www.sports-reference.com/cbb/schools/{{}}/men/{{}}-gamelogs.html"
+OPPONENT_SCHOOL_STATS_URL = "https =//www.sports-reference.com/cbb/seasons/men/{{}}-opponent-stats.html"
+OPPONENT_ADVANCED_STATS_URL = "https =//www.sports-reference.com/cbb/seasons/men/{{}}-advanced-opponent-stats.html"
+SPORTS_REFERENCE_RATINGS_URL = "https =//www.sports-reference.com/cbb/seasons/men/{{}}-ratings.html"
+SCHEDULE_URL = "https =//www.sports-reference.com/cbb/schools/{{}}/men/{{}}-schedule.html"
+KENPOM_URL = "https =//kenpom.com/index.php?y={{}}"
 
 [FOLDERS]
 SCHEDULE_FOLDER = "./Stats/Schedules/{{}}"
@@ -40,3 +40,31 @@ MIN_KENPOM_YEAR = 2002
 
 [OTHER]
 SPORTS_REFERENCE_CALLS_PER_MINUTE = 19
+
+# Some team name do not match the URL
+[TEAM_MATCHING]
+houston-christian = 'houston-baptist'
+kansas-city = 'missouri-kansas-city'
+little-rock = 'arkansas-little-rock'
+louisiana = 'louisiana-lafayette'
+siu-edwardsville = 'southern-illinois-edwardsville'
+nc-state = 'north-carolina-state'
+omaha = 'nebraska-omaha'
+purdue-fort-wayne = 'ipfw'
+tcu = 'texas-christian'
+texas-rio-grande-valley = 'texas-pan-american'
+the-citadel = 'citadel'
+uab = 'alabama-birmingham'
+uc-davis = 'california-davis'
+uc-irvine = 'california-irvine'
+uc-riverside = 'california-riverside'
+uc-santa-barbara = 'california-santa-barbara'
+ucl = 'ucla'
+unc-asheville = 'north-carolina-asheville'
+unc-greensboro = 'north-carolina-greensboro'
+unc-wilmington = 'north-carolina-wilmington'
+ut-arlington = 'texas-arlington'
+utep = 'texas-el-paso'
+uts = 'texas-san-antonio'
+vmi = 'virginia-military-institute'
+william--mary = 'william-mary'

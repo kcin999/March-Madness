@@ -18,36 +18,6 @@ logging.basicConfig(
 with open('config.toml', 'r') as f:
     config = toml.load(f)
 
-
-SPORTS_REFERENCE_TEAM_NAMES = {
-    'houston-christian': 'houston-baptist',
-    'kansas-city': 'missouri-kansas-city',
-    'little-rock': 'arkansas-little-rock',
-    'louisiana': 'louisiana-lafayette',
-    'siu-edwardsville': 'southern-illinois-edwardsville',
-    'nc-state': 'north-carolina-state',
-    'omaha': 'nebraska-omaha',
-    'purdue-fort-wayne': 'ipfw',
-    'tcu': 'texas-christian',
-    'texas-rio-grande-valley': 'texas-pan-american',
-    'the-citadel': 'citadel',
-    'uab': 'alabama-birmingham',
-    'uc-davis': 'california-davis',
-    'uc-irvine': 'california-irvine',
-    'uc-riverside': 'california-riverside',
-    'uc-santa-barbara': 'california-santa-barbara',
-    'ucl': 'ucla',
-    'unc-asheville': 'north-carolina-asheville',
-    'unc-greensboro': 'north-carolina-greensboro',
-    'unc-wilmington': 'north-carolina-wilmington',
-    'ut-arlington': 'texas-arlington',
-    'utep': 'texas-el-paso',
-    'uts': 'texas-san-antonio',
-    'vmi': 'virginia-military-institute',
-    'william--mary': 'william-mary',
-}
-
-
 def main():
     """Main Function"""
     system.createFolder(config['FOLDERS']['SEASONS_FOLDER'])
@@ -337,8 +307,8 @@ def format_team_name(team: str) -> str:
     team_name = team_name.replace('.', '')
 
     # Error for Teams appearing as different names
-    if team_name in SPORTS_REFERENCE_TEAM_NAMES:
-        team_name = SPORTS_REFERENCE_TEAM_NAMES[team_name]
+    if team_name in config['TEAM_MATCHING']:
+        team_name = config['TEAM_MATCHING'][team_name]
 
     return team_name
 
