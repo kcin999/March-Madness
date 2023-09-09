@@ -1,0 +1,42 @@
+[URLS]
+SCHOOL_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{{}}-school-stats.html"
+SCHOOL_ADVANCED_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{{}}-advanced-school-stats.html"
+SCHOOL_GAME_LOG_URL = "https://www.sports-reference.com/cbb/schools/{{}}/men/{{}}-gamelogs.html"
+OPPONENT_SCHOOL_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{{}}-opponent-stats.html"
+OPPONENT_ADVANCED_STATS_URL = "https://www.sports-reference.com/cbb/seasons/men/{{}}-advanced-opponent-stats.html"
+SPORTS_REFERENCE_RATINGS_URL = "https://www.sports-reference.com/cbb/seasons/men/{{}}-ratings.html"
+SCHEDULE_URL = "https://www.sports-reference.com/cbb/schools/{{}}/men/{{}}-schedule.html"
+KENPOM_URL = "https://kenpom.com/index.php?y={{}}"
+
+[FOLDERS]
+SCHEDULE_FOLDER = "./Stats/Schedules/{{}}"
+SEASONS_FOLDER = "./Stats/Seasons"
+
+[FILES]
+TEAM_SCHEDULE_FILE = './Stats/Schedules/{{}}/{{}}_schedule.csv'
+TEAM_GAME_LOG_FILE = './Stats/Schedules/{{}}/{{}}_gamelog.csv'
+YEAR_SCHEDULE_FILE = "./Stats/Schedules/{{}}_schedule.csv"
+YEAR_GAME_LOG_FILE = "./Stats/Schedules/{{}}_gamelog.csv"
+SCHOOL_BASIC_SEASON_STATS_FILE = './Stats/Seasons/{{}}_school_season_stats.csv'
+SCHOOL_ADV_SEASON_STATS_FILE = './Stats/Seasons/{{}}_school_advanced_season_stats.csv'
+OPPONENT_BASIC_SEASON_STATS_FILE = './Stats/Seasons/{{}}_opponent_season_stats.csv'
+OPPONENT_ADV_SEASON_STATS_FILE = './Stats/Seasons/{{}}_opponent_advanced_season_stats.csv'
+SPORTS_REFERENCE_RATINGS_FILE = './Stats/Seasons/{{}}_ratings.csv'
+KENPOM_FILE = './Stats/Seasons/{{}}_kenpom.csv'
+DATABASE_FILE = 'Stats/stats.sqlite'
+
+[YEARS]
+MIN_YEAR = 2002
+MAX_YEAR = 2023
+
+# Opponent Data only goes back to 2010
+MIN_OPPONENT_STATS_YEAR = 2010
+
+# Game log information only goes back to 2011
+GAMELOG_STATS_YEAR = 2011
+
+# Kenpom only goes back to 2002
+MIN_KENPOM_YEAR = 2002
+
+[OTHER]
+SPORTS_REFERENCE_CALLS_PER_MINUTE = 19
