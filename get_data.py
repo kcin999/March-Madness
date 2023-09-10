@@ -20,79 +20,27 @@ with open('config.toml', 'r') as f:
 
 def main():
     """Main Function"""
-    system.createFolder(config['FOLDERS']['SEASONS_FOLDER'])
+    system.createFolder(get_config_value('FOLDERS', 'SEASONS_FOLDER'))
     user_answer = input("Would you like to download sports reference data? (y/n) ")
     if user_answer.upper() in ["Y"]:
-        for year in range(config['YEARS']['GAMELOG_STATS_YEAR'], config['YEARS']['MAX_YEAR'] + 1):
-            # School Base Data
-            print(f"Getting School Base Data {year}")
-            season_data_df = get_season_data_from_sports_reference(year, 'school')
-            season_data_df.to_csv(config['FILE']['SCHOOL_BASIC_SEASON_STATS_FILE'].format(year), index=False)
-            time.sleep(60 / config['OTHER']['SPORTS_REFERENCE_CALLS_PER_MINUTE'])
-
-            # School Advanced Data
-            print(f"Getting School Advanced Data {year}")
-            df = get_advanced_season_data_from_sports_reference(year, 'school')
-            df.to_csv(config['FILE']['SCHOOL_ADV_SEASON_STATS_FILE'].format(year), index=False)
-            time.sleep(60 / config['OTHER']['SPORTS_REFERENCE_CALLS_PER_MINUTE'])
-
-            if year >= config['YEARS']['MIN_OPPONENT_STATS_YEAR']:
-                # Opponent Base Data
-                print(f"Getting Opponent Base Data {year}")
-                df = get_season_data_from_sports_reference(year, 'opponent')
-                df.to_csv(config['FILE']['OPPONENT_BASIC_SEASON_STATS_FILE'].format(year), index=False)
-                time.sleep(60 / config['OTHER']['SPORTS_REFERENCE_CALLS_PER_MINUTE'])
-
-                # Opponent Advanced Data
-                print(f"Getting Opponent Advanced Data {year}")
-                df = get_advanced_season_data_from_sports_reference(year, 'opponent')
-                df.to_csv(config['FILE']['OPPONENT_ADV_SEASON_STATS_FILE'].format(year), index=False)
-                time.sleep(60 / config['OTHER']['SPORTS_REFERENCE_CALLS_PER_MINUTE'])
-
-            # Rating Data
-            print(f"Getting Rating Data {year}")
-            df = get_ratings_from_sports_reference(year)
-            df.to_csv(config['FILE']['SPORTS_REFERENCE_RATINGS_FILE'].format(year), index=False)
-            time.sleep(60 / config['OTHER']['SPORTS_REFERENCE_CALLS_PER_MINUTE'])
-
-            # Team Specific Data
-            system.createFolder(config['FOLDERS']['SCHEDULE_FOLDER'].format(year))
-            schedule_df = pd.DataFrame()
-            gamelog_df = pd.DataFrame()
-            for team in season_data_df['School'].to_list():
-                print(f"Getting Schedule Data {team}, {year}")
-                df = get_schedule_data_from_sports_reference(year, team)
-                schedule_df = pd.concat([schedule_df, df])
-
-                time.sleep(60 / config['OTHER']['SPORTS_REFERENCE_CALLS_PER_MINUTE'])
-
-                if year >= config['YEARS']['GAMELOG_STATS_YEAR']:
-                    print(f"Getting Gamelog Data {team}, {year}")
-                    df = get_game_logs_from_sports_reference(year, team)
-                    gamelog_df = pd.concat([gamelog_df, df])
-                    time.sleep(60 / config['OTHER']['SPORTS_REFERENCE_CALLS_PER_MINUTE'])
-
-            schedule_df.to_csv(config['FILE']['YEAR_SCHEDULE_FILE'].format(year), index=False)
-
-            if year >= config['YEARS']['GAMELOG_STATS_YEAR']:
-                gamelog_df.to_csv(config['FILES']['YEAR_GAME_LOG_FILE'].format(year), index=False)
+        get_data_from_sports_reference()
 
 
     user_answer = input("Would you like to get ranking data from KenPom? (y/n) ")
     if user_answer.upper() in ["Y"]:
-        for year in range(max(config['YEARS']['MIN_KENPOM_YEAR'], config['YEARS']['MIN_YEAR']), config['YEARS']['MAX_YEAR'] + 1):
-            system.createFolder(config['FOLDERS']['SCHEDULE_FOLDER'].format(year))
+        for year in range(max(get_config_value('YEARS', 'MIN_KENPOM_YEAR'), get_config_value('YEARS', 'MIN_YEAR')), get_config_value('YEARS', 'MAX_YEAR') + 1):
+            system.createFolder(get_config_value('FOLDERS', 'SCHEDULE_FOLDER', year))
             df = get_kenpom_data(year)
-            df.to_csv(config['FILES']['KENPOM_FILE'].format(year), index=False)
+            df.to_csv(get_config_value('FILES', 'KENPOM_FILE', year), index=False)
             time.sleep(60/19)
 
 
     user_answer = input("Would you like to add from the CSVs into a sqlite database? (y/n) ")
     if user_answer.upper() in ["Y"]:
         # SQLITE connection
-        con = sqlite3.connect(config['FILES']['DATABASE_FILE'])
+        con = sqlite3.connect(get_config_value('FILES', 'DATABASE_FILE'))
         try:
-            for year in range(config['YEARS']['MIN_YEAR'], config['YEARS']['MAX_YEAR'] + 1):
+            for year in range(get_config_value('YEARS', 'MIN_YEAR'), get_config_value('YEARS', 'MAX_YEAR') + 1):
                 add_data_to_db(year, con)
 
             # Team Mapping
@@ -102,6 +50,64 @@ def main():
             raise FileNotFoundError("All modes must have run in order to build a correct sqlite file.") from exc
 
     print("Program has finished")
+
+
+def get_data_from_sports_reference():
+    """Gets all the data from the sports reference
+    """
+    for year in range(get_config_value('YEARS', 'GAMELOG_STATS_YEAR'), get_config_value('YEARS', 'MAX_YEAR') + 1):
+        # School Base Data
+        print(f"Getting School Base Data {year}")
+        season_data_df = get_season_data_from_sports_reference(year, 'school')
+        season_data_df.to_csv(get_config_value('FILES', 'SCHOOL_BASIC_SEASON_STATS_FILE', year), index=False)
+        time.sleep(60 / get_config_value('OTHER', 'SPORTS_REFERENCE_CALLS_PER_MINUTE'))
+
+        # School Advanced Data
+        print(f"Getting School Advanced Data {year}")
+        df = get_advanced_season_data_from_sports_reference(year, 'school')
+        df.to_csv(get_config_value('FILES', 'SCHOOL_ADV_SEASON_STATS_FILE', year), index=False)
+        time.sleep(60 / get_config_value('OTHER', 'SPORTS_REFERENCE_CALLS_PER_MINUTE'))
+
+        if year >= get_config_value('YEARS', 'MIN_OPPONENT_STATS_YEAR'):
+            # Opponent Base Data
+            print(f"Getting Opponent Base Data {year}")
+            df = get_season_data_from_sports_reference(year, 'opponent')
+            df.to_csv(get_config_value('FILES', 'OPPONENT_BASIC_SEASON_STATS_FILE', year), index=False)
+            time.sleep(60 / get_config_value('OTHER', 'SPORTS_REFERENCE_CALLS_PER_MINUTE'))
+
+            # Opponent Advanced Data
+            print(f"Getting Opponent Advanced Data {year}")
+            df = get_advanced_season_data_from_sports_reference(year, 'opponent')
+            df.to_csv(get_config_value('FILES', 'OPPONENT_ADV_SEASON_STATS_FILE', year), index=False)
+            time.sleep(60 / get_config_value('OTHER', 'SPORTS_REFERENCE_CALLS_PER_MINUTE'))
+
+        # Rating Data
+        print(f"Getting Rating Data {year}")
+        df = get_ratings_from_sports_reference(year)
+        df.to_csv(get_config_value('FILES', 'SPORTS_REFERENCE_RATINGS_FILE', year), index=False)
+        time.sleep(60 / get_config_value('OTHER', 'SPORTS_REFERENCE_CALLS_PER_MINUTE'))
+
+        # Team Specific Data
+        system.createFolder(get_config_value('FOLDERS', 'SCHEDULE_FOLDER', year))
+        schedule_df = pd.DataFrame()
+        gamelog_df = pd.DataFrame()
+        for team in season_data_df['School'].to_list():
+            print(f"Getting Schedule Data {team}, {year}")
+            df = get_schedule_data_from_sports_reference(year, team)
+            schedule_df = pd.concat([schedule_df, df])
+
+            time.sleep(60 / get_config_value('OTHER', 'SPORTS_REFERENCE_CALLS_PER_MINUTE'))
+
+            if year >= get_config_value('YEARS', 'GAMELOG_STATS_YEAR'):
+                print(f"Getting Gamelog Data {team}, {year}")
+                df = get_game_logs_from_sports_reference(year, team)
+                gamelog_df = pd.concat([gamelog_df, df])
+                time.sleep(60 / get_config_value('OTHER', 'SPORTS_REFERENCE_CALLS_PER_MINUTE'))
+
+        schedule_df.to_csv(get_config_value('FILES', 'YEAR_SCHEDULE_FILE', year), index=False)
+
+        if year >= get_config_value('YEARS', 'GAMELOG_STATS_YEAR'):
+            gamelog_df.to_csv(get_config_value('FILES', 'YEAR_GAME_LOG_FILE', year), index=False)
 
 
 def get_team_list(year: int) -> pd.Series:
@@ -128,10 +134,10 @@ def get_season_data_from_sports_reference(year: int, page: str) -> pd.DataFrame:
     :rtype: pd.DataFrame
     """
     if page.upper() == 'SCHOOL':
-        url = config['URLS']['SCHOOL_STATS_URL']
+        url = get_config_value('URLS', 'SCHOOL_STATS_URL')
         table_id = 'basic_school_stats'
     elif page.upper() == 'OPPONENT':
-        url = config['URLS']['OPPONENT_SCHOOL_STATS_URL']
+        url = get_config_value('URLS', 'OPPONENT_SCHOOL_STATS_URL')
         table_id = 'basic_opp_stats'
     else:
         raise ValueError(f"Page Parameter, '{page}', is not known")
@@ -191,10 +197,10 @@ def get_advanced_season_data_from_sports_reference(year: int, page: str) -> pd.D
     :rtype: pd.DataFrame
     """
     if page.upper() == 'SCHOOL':
-        url = config['URLS']['SCHOOL_ADVANCED_STATS_URL']
+        url = get_config_value('URLS', 'SCHOOL_ADVANCED_STATS_URL')
         table_id = 'adv_school_stats'
     elif page.upper() == 'OPPONENT':
-        url = config['URLS']['OPPONENT_ADVANCED_STATS_URL']
+        url = get_config_value('URLS', 'OPPONENT_ADVANCED_STATS_URL')
         table_id = 'adv_opp_stats'
     else:
         raise ValueError(f"Page Parameter, '{page}', is not known")
@@ -250,7 +256,7 @@ def get_ratings_from_sports_reference(year: int):
     :rtype: pd.Dataframe
     """
     # Gets Data
-    response = requests.get(config['URLS']['SPORTS_REFERENCE_RATINGS_URL'].format(year), timeout=None)
+    response = requests.get(get_config_value('URLS', 'SPORTS_REFERENCE_RATINGS_URL', year), timeout=None)
 
     # Makes sure that there is no error
     response.raise_for_status()
@@ -325,27 +331,27 @@ def get_schedule_data_from_sports_reference(year: int, team: str) -> pd.DataFram
     :rtype: pd.DataFrame
     """
     team_df = pd.DataFrame()
-    if os.path.exists(config['FILES']['TEAM_SCHEDULE_FILE'].format(year, team)):
+    if os.path.exists(get_config_value('FILES', 'TEAM_SCHEDULE_FILE', year, team)):
         return team_df
 
     team_name = format_team_name(team)
     # Gets Data
     response = requests.get(
-        config['URLS']['SCHEDULE_URL'].format(team_name, year),
+        get_config_value('URLS', 'SCHEDULE_URL', team_name, year),
         timeout=None
     )
 
     if response.status_code == 404:
         logging.warning(
             "Could not find address (%s) for %s",
-            config['URLS']['SCHEDULE_URL'].format(team_name, year),
+            get_config_value('URLS', 'SCHEDULE_URL', team_name, year),
             team
         )
         return team_df
     elif response.status_code != 200:
         logging.warning(
             "Status Code: %s return for URL: %s",
-            response.status_code, config['URLS']['SCHEDULE_URL'].format(team_name, year)
+            response.status_code, get_config_value('URLS', 'SCHEDULE_URL', team_name, year)
         )
 
     # Reads Data into DataFrame
@@ -360,7 +366,7 @@ def get_schedule_data_from_sports_reference(year: int, team: str) -> pd.DataFram
         logging.warning(
             "Error for %s. URL: %s",
             team,
-            config['URLS']['SCHEDULE_URL'].format(team_name, year)
+            get_config_value('URLS', 'SCHEDULE_URL', team_name, year)
         )
         return team_df
 
@@ -400,7 +406,7 @@ def get_schedule_data_from_sports_reference(year: int, team: str) -> pd.DataFram
     # False -> Team 2 won the game
     team_df['Result'] = team_df['Team 1 Score'] > team_df['Team 2 Score']
 
-    team_df.to_csv(config['FILES']['TEAM_SCHEDULE_FILE'].format(year, team), index=False)
+    team_df.to_csv(get_config_value('FILES', 'TEAM_SCHEDULE_FILE', year, team), index=False)
 
     return team_df
 
@@ -418,28 +424,28 @@ def get_game_logs_from_sports_reference(year: int, team: str) -> pd.DataFrame:
     """
     team_df = pd.DataFrame()
 
-    if os.path.exists(config['FILES']['TEAM_GAME_LOG_FILE'].format(year, team)):
+    if os.path.exists(get_config_value('FILES', 'TEAM_GAME_LOG_FILE', year, team)):
         return team_df
 
     team_name = format_team_name(team)
 
     # Gets Data
     response = requests.get(
-        config['URLS']['SCHOOL_GAME_LOG_URL'].format(team_name, year),
+        get_config_value('URLS', 'SCHOOL_GAME_LOG_URL', team_name, year),
         timeout=None
     )
 
     if response.status_code == 404:
         logging.warning(
             "Could not find address (%s) for %s",
-            config['URLS']['SCHOOL_GAME_LOG_URL'].format(team_name, year),
+            get_config_value('URLS', 'SCHOOL_GAME_LOG_URL', team_name, year),
             team
         )
         return team_df
     elif response.status_code != 200:
         logging.warning(
             "Status Code: %s return for URL: %s",
-            response.status_code, config['URLS']['SCHOOL_GAME_LOG_URL'].format(team_name, year)
+            response.status_code, get_config_value('URLS', 'SCHOOL_GAME_LOG_URL', team_name, year)
         )
 
     # Reads Data into DataFrame
@@ -454,7 +460,7 @@ def get_game_logs_from_sports_reference(year: int, team: str) -> pd.DataFrame:
         logging.warning(
             "Error for %s. URL: %s",
             team,
-            config['URLS']['SCHOOL_GAME_LOG_URL'].format(team_name, year)
+            get_config_value('URLS', 'SCHOOL_GAME_LOG_URL', team_name, year)
         )
         return team_df
 
@@ -498,7 +504,7 @@ def get_game_logs_from_sports_reference(year: int, team: str) -> pd.DataFrame:
     # False -> Team 2 won the game
     team_df['Result'] = team_df['Team 1 Score'] > team_df['Team 2 Score']
 
-    team_df.to_csv(config['FILES']['TEAM_GAME_LOG_FILE'].format(year, team), index=False)
+    team_df.to_csv(get_config_value('FILES', 'TEAM_GAME_LOG_FILE', year, team), index=False)
 
 
     return team_df
@@ -510,7 +516,7 @@ def remove_duplicate_games(year: int):
     :param year: _description_
     :type year: int
     """
-    df = pd.read_csv(config['FILE']['YEAR_SCHEDULE_FILE'].format(year))
+    df = pd.read_csv(get_config_value('FILES', 'YEAR_SCHEDULE_FILE', year))
 
 
     df = df.merge(
@@ -530,7 +536,7 @@ def remove_duplicate_games(year: int):
     # Idea from here
     # https://stackoverflow.com/questions/51182228/python-delete-duplicates-in-a-dataframe-based-on-two-columns-combinations
     df = df[~df[['Date', 'Team 1', 'Team 2']].apply(frozenset, axis=1).duplicated()]
-    df.to_csv(config['FILE']['YEAR_SCHEDULE_FILE'].format(year), index=False)
+    df.to_csv(get_config_value('FILES', 'YEAR_SCHEDULE_FILE', year), index=False)
 
 
 def get_kenpom_data(year: int) -> pd.DataFrame:
@@ -542,7 +548,7 @@ def get_kenpom_data(year: int) -> pd.DataFrame:
     # Gets Data
     # Set Custom Headers to be able to work
     headers = {'User-Agent': 'PostmanRuntime/7.29.2'}
-    response = requests.get(config['URLS']['KENPOM_URL'].format(year), timeout=None, headers = headers)
+    response = requests.get(get_config_value('URLS', 'KENPOM_URL', year), timeout=None, headers = headers)
 
     # Makes sure that there is no error
     response.raise_for_status()
@@ -593,11 +599,11 @@ def add_data_to_db(year: int, con: sqlite3.Connection):
 
     :param year: Year of the data to add
     :type year: int
-    :param con: _description_
+    :param con: Database Connection
     :type con: sqlite3.Connection
     """
-    school_basic_stats_df = pd.read_csv(config['FILE']['SCHOOL_BASIC_SEASON_STATS_FILE'].format(year))
-    school_advanced_stats_df = pd.read_csv(config['FILE']['SCHOOL_ADV_SEASON_STATS_FILE'].format(year))
+    school_basic_stats_df = pd.read_csv(get_config_value('FILES', 'SCHOOL_BASIC_SEASON_STATS_FILE', year))
+    school_advanced_stats_df = pd.read_csv(get_config_value('FILES', 'SCHOOL_ADV_SEASON_STATS_FILE', year))
 
     # Remove Duplicate Information
     school_advanced_stats_df = school_advanced_stats_df.drop(columns=[
@@ -621,23 +627,23 @@ def add_data_to_db(year: int, con: sqlite3.Connection):
     school_stats_df['Year'] = year
     school_stats_df.to_sql('school_season_stats', con, if_exists='append', index=False)
 
-    schedule_df = pd.read_csv(config['FILE']['YEAR_SCHEDULE_FILE'].format(year))
+    schedule_df = pd.read_csv(get_config_value('FILES', 'YEAR_SCHEDULE_FILE', year))
     schedule_df['Year'] = year
     schedule_df.to_sql('schedule_stats', con, if_exists='append', index=False)
 
-    school_ratings_df = pd.read_csv(config['FILE']['SPORTS_REFERENCE_RATINGS_FILE'].format(year))
+    school_ratings_df = pd.read_csv(get_config_value('FILES', 'SPORTS_REFERENCE_RATINGS_FILE', year))
     school_ratings_df['Year'] = year
     school_ratings_df.to_sql('ratings_sr', con, if_exists='append')
 
-    if year >= config['YEARS']['MIN_KENPOM_YEAR']:
-        kenpom_df = pd.read_csv(config['FILES']['KENPOM_FILE'].format(year))
+    if year >= get_config_value('YEARS', 'MIN_KENPOM_YEAR'):
+        kenpom_df = pd.read_csv(get_config_value('FILES', 'KENPOM_FILE', year))
         kenpom_df['Year'] = year
         kenpom_df.to_sql('kenpom_stats', con, if_exists='append', index=False)
 
 
-    if year >= config['YEARS']['MIN_OPPONENT_STATS_YEAR']:
-        opponent_basic_stats_df = pd.read_csv(config['FILE']['OPPONENT_BASIC_SEASON_STATS_FILE'].format(year))
-        opponent_advanced_stats_df = pd.read_csv(config['FILE']['OPPONENT_ADV_SEASON_STATS_FILE'].format(year))
+    if year >= get_config_value('YEARS', 'MIN_OPPONENT_STATS_YEAR'):
+        opponent_basic_stats_df = pd.read_csv(get_config_value('FILES', 'OPPONENT_BASIC_SEASON_STATS_FILE', year))
+        opponent_advanced_stats_df = pd.read_csv(get_config_value('FILES', 'OPPONENT_BASIC_SEASON_STATS_FILE', year))
 
         # Remove Duplicate Information
         opponent_advanced_stats_df = opponent_advanced_stats_df.drop(columns=[
@@ -661,6 +667,30 @@ def add_data_to_db(year: int, con: sqlite3.Connection):
         opponent_stats_df['Year'] = year
         opponent_stats_df.to_sql('opponent_season_stats', con, if_exists='append', index=False)
 
+
+    if year > get_config_value('YEARS', 'GAMELOG_STATS_YEAR'):
+        game_log_df = pd.read_csv(get_config_value('FILES', 'YEAR_GAME_LOG_FILE', year))
+
+        game_log_df['Year'] = year
+        game_log_df.to_sql('game_log', con, if_exists='append', index=False)
+
+
+def get_config_value(section: str, key: str, *args):
+    """Gets a configuration value with the parts replaced that are needed
+
+    :param section: Config Section
+    :type section: str
+    :param key: Config Key
+    :type key: str
+    :return: Configuration value
+    :rtype: str | int
+    """
+    value = config[section][key]
+
+    for x in args:
+        value = value.replace(r'{}', str(x), 1)
+
+    return value
 
 if __name__ == "__main__":
     main()
